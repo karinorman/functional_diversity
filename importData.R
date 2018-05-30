@@ -16,6 +16,17 @@ source_https <- function(u, unlink.tmp.certs = FALSE) {
   eval(parse(text = script), envir= .GlobalEnv)
 }
 
+#create own get_species_data() function to use DBI/table method for connecting to database
+get_species_data = function() {
+  data_path <- paste('./data/', 'bbs', '_species.csv', sep = "")
+  if (file.exists(data_path)) {
+    return(read.csv(data_path))
+  }else{
+    write.csv(species, file = data_path, row.names = FALSE, quote = FALSE)
+    return(species)
+  }
+}
+
 source_https("https://raw.githubusercontent.com/weecology/bbs-forecasting/master/R/forecast-bbs-core.R")
 source_https("https://raw.githubusercontent.com/weecology/bbs-forecasting/master/R/save_provenance.R")
 
@@ -32,7 +43,7 @@ get_bbs <- function(){
       install_dataset('breed-bird-survey')
     }
     
-    birds <- DBI::dbConnect(RSQLite::SQLite(), "~/Dropbox/Data/functional-diversity/bbsforecasting.sqlite")
+    birds <- DBI::dbConnect(RSQLite::SQLite(), "~/Dropbox/Data/functional-diversity/bbsforecasting_old.sqlite")
     
     #save database tables as table in R to use with tidyverse commands
     counts <- tbl(birds, "breed_bird_survey_counts")
@@ -80,11 +91,18 @@ get_bbs <- function(){
 }
 
 bbs <- get_bbs()
+
 ###################
 ####Trait Data#####
 ###################
 get_trait_data <- function(){
-  data_path <- 
-  dir.create("data/elton_traits")
-  rdataretriever::install("elton-traits", 'csv', data_dir = "data/elton_traits")
+  data_path <- paste('./data/elton_traits/', 'elton_traits', '_BirdFuncDat.csv', sep = "")
+  if (file.exists(data_path)){
+    return(read_csv(data_path))
+  }else{
+    # dir.create("data/elton_traits")
+    # rdataretriever::install("elton-traits", 'csv', data_dir = "data/elton_traits")
+  }
 }
+
+trait_data <- get_trait_data()
