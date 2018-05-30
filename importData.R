@@ -1,4 +1,5 @@
 library(tidyverse)
+library(stringr)
 
 source_https <- function(u, unlink.tmp.certs = FALSE) {
   # load package
@@ -14,6 +15,7 @@ source_https <- function(u, unlink.tmp.certs = FALSE) {
 }
 
 source_https("https://raw.githubusercontent.com/weecology/bbs-forecasting/master/R/forecast-bbs-core.R")
+source_https("https://raw.githubusercontent.com/weecology/bbs-forecasting/master/R/save_provenance.R")
 
 ##Not currently working, installs the database but doesn't produce the csv. May work on pre 3.5.0 R verison
 bbs <- get_bbs_data()
