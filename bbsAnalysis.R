@@ -59,12 +59,9 @@ bbs_compat <- get_compatible_sci_names(bbs, sci_equivalent)
 
 #Merge bbs
 bbs_trait <- bird_trait %>%
-  select(-specid, -passnonpass, -iocorder, -blfamilylatin, -blfamilyenglish, -blfamsequid, -taxo, -bodymass_speclevel,
-         -ends_with("source"), -ends_with("comment")) %>%
-  right_join(bbs, by = c("scientific" = "")
+  select(-specid, -passnonpass, -iocorder, -blfamilylatin, -blfamilyenglish, -blfamsequid, -taxo, -bodymass_speclevel, -english,
+         -ends_with("source"), -ends_with("comment"), -ends_with("enteredby")) %>%
+  right_join(select(bbs_compat, -scientific), by = c("scientific" = "compat_sci")) %>%
+  filter(!is.na(scientific))
+  
 
-
-species_joined_com <- bbs %>% 
-  select(scientific, common_name) %>%
-  unique() %>%
-  full_join(select(bird_trait, scientific, english), by = c("common_name" = "english"))
