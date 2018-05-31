@@ -15,33 +15,53 @@ sci_equivalent <- bbs %>%
   rename(bbs_sci = scientific.x, trait_sci = scientific.y) 
                                                                                         
 
-## Yellow-warbler = yellow-warbler w/o commentary
+## Yellow-rumped warbler = yellow-rumped warbler w/o commentary
 ## Black-throated Gray Warbler = Black-throated Grey Warbler
 ## Gray Hawk = grey hawk (technically different subspecies?)
 
 ###No trait data for: Pacific Wren, Eastern Yellow Wagtail, Sagebrush sparrow, Woodhouse's scrub jay, Bell's sparrow
 
 
-### Replace old sci names with new sci names - test case
+get_compatible_sci_names <- function(data, sci_equiv){
+  #Create a new column called compat_sci that replaces BBS sci names with their trait data equivalent#
+  
+  #case when formula - one for each row of equivalencies 
+  replace_form <- lapply(1:dim(sci_equiv)[1],function(var) 
+    formula(paste0('data$scientific == as.character(sci_equiv$bbs_sci[',
+                   var, ']) ~ as.character(sci_equiv$trait_sci[', var,'])')))
+  
+  #add special cases where neither common or scientific names match, but the species are the same
+  ##still don't work, not sure why
+  replace_form <- append(replace_form, 
+                         c(formula('data$scientific == \'Setophaga coronata\' ~ \'Dendroica coronata\''),
+                           formula('data$scientific == \'Setophaga nigrescens\' ~ \'Dendroica nigrescens\''),
+                           formula('data$scientific == as.character(\'Buteo plagiatus\') ~ \'Buteo nitidus\'')
+                           )
+                         )
+  
+  #add case for when there is no equivalence and we keep the original name
+  replace_form <- append(replace_form, formula(paste0("TRUE ~ as.character(data$scientific)")))
+  
+  #add column
+  data %>%
+    mutate(compat_sci = case_when(!!!replace_form))
+  
+}
+
+#test case
 test_bbs <- data.frame(scientific = c("a", "b", "c", "d"), abundance = c(1,2,3,4))
 test_sci <- data.frame(bbs_sci = c("a", "b"), trait_sci = c("a1", "b1"))
+get_compatible_sci_names(data = test_bbs, sci_equiv = test_sci)
 
-#case when formula
-replace_form <- lapply(1:dim(test_sci)[1],function(var) 
-  formula(paste0('test_bbs$scientific == as.character(test_sci$bbs_sci[',var, ']) ~ as.character(test_sci$trait_sci[', var,'])'),
-          env=globalenv()))
-replace_form <- append(replace_form, formula(paste0("TRUE ~ as.character(test_bbs$scientific)")))
-
-test_bbs %>%
-  mutate(compat_sci = case_when(!!!replace_form))
+#get equivalence column for BBS data
+bbs_compat <- get_compatible_sci_names(bbs, sci_equivalent)
 
 
-
-
+#Merge bbs
 bbs_trait <- bird_trait %>%
   select(-specid, -passnonpass, -iocorder, -blfamilylatin, -blfamilyenglish, -blfamsequid, -taxo, -bodymass_speclevel,
          -ends_with("source"), -ends_with("comment")) %>%
-  right_join(bbs, by = "scientific")
+  right_join(bbs, by = c("scientific" = "")
 
 
 species_joined_com <- bbs %>% 
