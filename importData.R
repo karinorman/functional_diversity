@@ -1,4 +1,5 @@
 library(tidyverse)
+library(dbplyr)
 
 #### Get scripts from Weecology bbs import ####
 
@@ -23,11 +24,12 @@ get_bbs <- function(){
   data_path <- paste('./data/', 'bbs', '_data.csv', sep="")
   if (file.exists(data_path)){
     return(read_csv(data_path))
+    print("yes csv")
   }
   else{
-    
     if (!db_engine(action='check', db = "~/Dropbox/Data/functional-diversity/bbsforecasting.sqlite",
                    table_to_check = 'breed_bird_survey_counts')){
+      print("no database")
       install_dataset('breed-bird-survey')
     }
     
