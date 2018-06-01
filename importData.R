@@ -5,34 +5,7 @@ library(stringr)
 ###### BBS ########
 ###################
 
-# Get scripts from Weecology bbs import #
-
-source_https <- function(u, unlink.tmp.certs = FALSE) {
-  # load package
-  require(RCurl)
-  
-  # read script lines from website using a security certificate
-  if(!file.exists("cacert.pem")) download.file(url="http://curl.haxx.se/ca/cacert.pem", destfile = "cacert.pem")
-  script <- getURL(u, followlocation = TRUE, cainfo = "cacert.pem")
-  if(unlink.tmp.certs) unlink("cacert.pem")
-  
-  # parase lines and evealuate in the global environement
-  eval(parse(text = script), envir= .GlobalEnv)
-}
-
-#create own get_species_data() function to use DBI/table method for connecting to database
-get_species_data = function() {
-  data_path <- paste('./data/', 'bbs', '_species.csv', sep = "")
-  if (file.exists(data_path)) {
-    return(read.csv(data_path))
-  }else{
-    write.csv(species, file = data_path, row.names = FALSE, quote = FALSE)
-    return(species)
-  }
-}
-
-source_https("https://raw.githubusercontent.com/weecology/bbs-forecasting/master/R/forecast-bbs-core.R")
-source_https("https://raw.githubusercontent.com/weecology/bbs-forecasting/master/R/save_provenance.R")
+source("bbs_forecasting_functions.R")
 
 #Adapted from get_bbs_data() from sourced scripts
 get_bbs <- function(){
@@ -57,6 +30,8 @@ get_bbs <- function(){
     species <- tbl(birds, "breed_bird_survey_species") %>%
       select(-species_id) #drop the column that BBS is calling species_id (not the same as our species ID which is the AOU code)
     
+    print('tables ran')
+    
     #join all data into one table
     bbs <- left_join(weather, counts, by = c("year", "statenum", "route", "rpid", "year")) %>%
       left_join(routes, by = c("statenum", "route")) %>%
@@ -67,18 +42,7 @@ get_bbs <- function(){
       select(site_id, latitude, longitude, aou, year, speciestotal) %>%
       rename(species_id = aou, abundance = speciestotal, lat = latitude, long = longitude) %>%
       collect() 
-    
-    #create own get_species_data() function to use DBI/table method for connecting to database
-    get_species_data = function() {
-      data_path <- paste('./data/', 'bbs', '_species.csv', sep = "")
-      if (file.exists(data_path)) {
-        return(read.csv(data_path))
-      }else{
-        write.csv(species, file = data_path, row.names = FALSE, quote = FALSE)
-        return(species)
-      }
-    }
-    
+
     #clean up specie(i.e. combine subspecies, exclude poorly sampled species), see source script for details - probably doesn't work
     bbs_clean <- bbs %>% 
       filter_species() %>%
@@ -157,7 +121,8 @@ get_bbs_w_traits <- function(){
       replace_form <- append(replace_form, 
                              c(formula('data$scientific == \'Setophaga coronata\' ~ \'Dendroica coronata\''),
                                formula('data$scientific == \'Setophaga nigrescens\' ~ \'Dendroica nigrescens\''),
-                               formula('data$scientific == as.character(\'Buteo plagiatus\') ~ \'Buteo nitidus\'')
+                               formula('data$scientific == as.character(\'Buteo plagiatus\') ~ \'Buteo nitidus\''),
+                               formula('data$scientific == as.character(\'fish\') ~ \'pie\'')
                              )
       )
       
@@ -171,7 +136,7 @@ get_bbs_w_traits <- function(){
     }
     
     #test case
-    test_bbs <- data.frame(scientific = c("a", "b", "c", "d"), abundance = c(1,2,3,4))
+    test_bbs <- data.frame(scientific = c("a", "b", "c", "d", "fish"), abundance = c(1,2,3,4,5))
     test_sci <- data.frame(bbs_sci = c("a", "b"), trait_sci = c("a1", "b1"))
     get_compatible_sci_names(data = test_bbs, sci_equiv = test_sci)
     
