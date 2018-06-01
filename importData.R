@@ -121,8 +121,7 @@ get_bbs_w_traits <- function(){
       replace_form <- append(replace_form, 
                              c(formula('data$scientific == \'Setophaga coronata\' ~ \'Dendroica coronata\''),
                                formula('data$scientific == \'Setophaga nigrescens\' ~ \'Dendroica nigrescens\''),
-                               formula('data$scientific == as.character(\'Buteo plagiatus\') ~ \'Buteo nitidus\''),
-                               formula('data$scientific == as.character(\'fish\') ~ \'pie\'')
+                               formula('data$scientific == as.character(\'Buteo plagiatus\') ~ \'Buteo nitidus\'')
                              )
       )
       
@@ -134,11 +133,6 @@ get_bbs_w_traits <- function(){
         mutate(compat_sci = case_when(!!!replace_form))
       
     }
-    
-    #test case
-    test_bbs <- data.frame(scientific = c("a", "b", "c", "d", "fish"), abundance = c(1,2,3,4,5))
-    test_sci <- data.frame(bbs_sci = c("a", "b"), trait_sci = c("a1", "b1"))
-    get_compatible_sci_names(data = test_bbs, sci_equiv = test_sci)
     
     #get equivalence column for BBS data
     bbs_compat <- get_compatible_sci_names(bbs, sci_equivalent)
