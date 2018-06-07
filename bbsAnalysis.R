@@ -8,65 +8,114 @@ bbs <- read_csv("data/bbs_data.csv") #422 species
 bbs_trait <- read_csv("data/bbsTraits_master.csv") #414 species
   
 #Species Matrix  
-species <- bbs_trait %>% #401 species - where are they going??
-  filter(year > 2006) %>%
-  select(scientific, site_id, abundance) %>%
-  group_by(scientific, site_id) %>%
-  summarize(m = mean(abundance)) %>%
-  spread(scientific, m) %>%
-  column_to_rownames(var = "site_id")
+get_species_matrix <- function(){
+  species <- bbs_trait %>% #401 species - where are they going??
+    filter(year > 2006) %>%
+    select(scientific, site_id, abundance) %>%
+    group_by(scientific, site_id) %>%
+    summarize(m = mean(abundance)) %>%
+    spread(scientific, m) %>%
+    column_to_rownames(var = "site_id")
+}
 
-#Trait Matrix  
-traits <- trait %>%
-  filter(scientific %in% colnames(species)) %>%
-  select(-specid, -passnonpass, -iocorder, -blfamilylatin, -blfamilyenglish, -blfamsequid, -taxo, -bodymass_speclevel, -english, -diet_certainty,
-         -ends_with("source"), -ends_with("comment"), -ends_with("enteredby")) %>%
-  arrange(scientific) %>%
-  column_to_rownames(var = "scientific")
+#Trait Matrix
+get_trait_matrix <- function(){
+  traits <- trait %>%
+    filter(scientific %in% colnames(species)) %>%
+    select(-specid, -passnonpass, -iocorder, -blfamilylatin, -blfamilyenglish, -blfamsequid, -taxo, -bodymass_speclevel, -english, -diet_certainty,
+           -ends_with("source"), -ends_with("comment"), -ends_with("enteredby")) %>%
+    arrange(scientific) %>%
+    column_to_rownames(var = "scientific")
+}
 
 #Get Functional Diversity Metrics  
-testFD <- dbFD(traits, species, w.abun = TRUE)
-save(testFD, file = "FD_stats.RData")
+get_site_FD <- function(){  
+  data_path <- paste('./data/', 'FD_stats.RData', sep="")
+  if (file.exists(data_path)){
+    print("FD present")
+    return(load(data_path))
+  }else{
+    traits <- get_trait_matrix()
+    species <- get_species_matrix()
+    
+    FD <- dbFD(traits, species, w.abun = TRUE)
+    save(FD, file = "FD_stats.RData")
+  }
+}
 
+#Get Ecoregions for each site
 
-#Get Ecoregion for each site
-p <-  4326 # +proj=longlat +datum=WGS84
-bcr <- st_read("data/bcr_shp/BCR_Terrestrial_master.shp") %>%
-  st_transform(crs = p) %>%
-  filter(REGION %in% c("CANADA", "USA"))
+get_ecoreg_shp <- function(){
+  p <-  4326 # +proj=longlat +datum=WGS84
+  bcr <- st_read("data/bcr_shp/BCR_Terrestrial_master.shp") %>%
+    st_transform(crs = p) %>%
+    filter(REGION %in% c("CANADA", "USA"))
+}
 
 get_route_data <- function(){
   route_locations <- unique(dplyr::select(bbs, site_id, long, lat))
   spatial_routes <- route_locations %>%
-    #dplyr::select(long, lat) %>%
     st_as_sf(coords = c("long", "lat"), crs = p)
 }
 
-bbs_routes <- get_route_data()
 
-bcr_names <- unique(bcr$BCRNAME)
-region_sites <- matrix(ncol = length(bcr_names), nrow = dim(bbs_routes)[1])
-
-for (i in 1:length(bcr_names)){
-  reg_name <- bcr %>%
-    filter(BCRNAME == bcr_names[i])
-  int_mat <- st_intersects(reg_name, bbs_routes, sparse = FALSE)
+get_sites_w_region <- function(){
+  bcr <- get_ecoreg_shp
+  bbs_routes <- get_route_data()
   
-  if (dim(int_mat)[1] > 0 & sum(int_mat > 0)){
-    print(1)
-    int_mat <- as.logical(colSums(int_mat))
-  }else{
-    print(c(2, i))
-    int_mat <- rep(FALSE, dim(bbs_routes)[1])
+  bcr_names <- unique(bcr$BCRNAME)
+  region_sites <- matrix(ncol = length(bcr_names), nrow = dim(bbs_routes)[1])
+  
+  for (i in 1:length(bcr_names)){
+    reg_name <- bcr %>%
+      filter(BCRNAME == bcr_names[i])
+    int_mat <- st_intersects(reg_name, bbs_routes, sparse = FALSE)
+    
+    # case_when(
+    #   dim(int_mat)[1] > 0 & sum(int_mat) > 0 ~ as.logical(colSums(int_mat)),
+    #   sum(int_mat) == 0 ~ rep(FALSE, dim(bbs_routes)[1]),
+    #   TRUE ~ int_mat
+    # )
+    
+    #case when there is more than one polygon, and some intersections are found
+    if (dim(int_mat)[1] > 0 & sum(int_mat > 0)){
+      int_mat <- as.logical(colSums(int_mat))
+    }
+    
+    #case when no intersections are found
+    if (sum(int_mat) == 0){
+      int_mat <- rep(FALSE, dim(bbs_routes)[1])
+    }
+    region_sites[,i] <- (int_mat)
   }
-  print(dim(int_mat))
-  region_sites[,i] <- (int_mat)
+  
   region_sites <- as.data.frame(region_sites)
   colnames(region_sites) <- bcr_names
+  region_sites <- cbind(site_id = bbs_routes$site_id, region_sites)
+  
+  #Check if any sites were classified in two 
+  bad_sites <- apply(dplyr::select(region_sites, -site_id), 1, function(x) length(which(x)))
+  
+  if(max(bad_sites) > 1){
+    warning("One or more sites has been classified to multiple regions")
+  }
+  
+  region_sites[region_sites == 0 ] <- NA
+  site_labels <- region_sites %>% 
+    gather(region, value, -site_id) %>% 
+    na.omit() %>% 
+    dplyr::select(-value) %>%
+    left_join(., dplyr::select(region_sites, site_id)) %>%
+    left_join(., bbs_routes) %>%
+    arrange(site_id)
+  
 }
 
-site_region_num <- apply(region_sites, 1, function(x) min(which(x == TRUE)))
+bbs_sites <- get_sites_w_region()
 
-site_region_num_min <- apply(region_sites, 1, function(x) max(which(x == TRUE)))
+sites_in_region <- bbs_sites %>% 
+  group_by(region) %>%
+  summarise(n = n()) %>%
+  arrange(n)
 
 
