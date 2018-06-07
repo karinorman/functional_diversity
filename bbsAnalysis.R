@@ -56,28 +56,29 @@ get_ecoreg_shp <- function(){
     filter(REGION %in% c("CANADA", "USA"))
 }
 
-get_route_data <- function(){
+#get bbs sites as a spatial dataframe
+get_sites_sf <- function(){
   route_locations <- unique(dplyr::select(bbs, site_id, long, lat))
   spatial_routes <- route_locations %>%
     st_as_sf(coords = c("long", "lat"), crs = p)
 }
 
 
-get_sites_w_region <- function(){
-  bcr <- get_ecoreg_shp
-  bbs_routes <- get_route_data()
+get_sites_w_region_FD <- function(){
+  bcr <- get_ecoreg_shp()
+  bbs_sites <- get_sites_sf()
   
   bcr_names <- unique(bcr$BCRNAME)
-  region_sites <- matrix(ncol = length(bcr_names), nrow = dim(bbs_routes)[1])
+  region_sites <- matrix(ncol = length(bcr_names), nrow = dim(bbs_sites)[1])
   
   for (i in 1:length(bcr_names)){
     reg_name <- bcr %>%
       filter(BCRNAME == bcr_names[i])
-    int_mat <- st_intersects(reg_name, bbs_routes, sparse = FALSE)
+    int_mat <- st_intersects(reg_name, bbs_sites, sparse = FALSE)
     
     # case_when(
     #   dim(int_mat)[1] > 0 & sum(int_mat) > 0 ~ as.logical(colSums(int_mat)),
-    #   sum(int_mat) == 0 ~ rep(FALSE, dim(bbs_routes)[1]),
+    #   sum(int_mat) == 0 ~ rep(FALSE, dim(bbs_sites)[1]),
     #   TRUE ~ int_mat
     # )
     
@@ -88,14 +89,14 @@ get_sites_w_region <- function(){
     
     #case when no intersections are found
     if (sum(int_mat) == 0){
-      int_mat <- rep(FALSE, dim(bbs_routes)[1])
+      int_mat <- rep(FALSE, dim(bbs_sites)[1])
     }
     region_sites[,i] <- (int_mat)
   }
   
   region_sites <- as.data.frame(region_sites)
   colnames(region_sites) <- bcr_names
-  region_sites <- cbind(site_id = bbs_routes$site_id, region_sites)
+  region_sites <- cbind(site_id = bbs_sites$site_id, region_sites)
   
   #Check if any sites were classified in two 
   bad_sites <- apply(dplyr::select(region_sites, -site_id), 1, function(x) length(which(x)))
@@ -104,18 +105,24 @@ get_sites_w_region <- function(){
     warning("One or more sites has been classified to multiple regions")
   }
   
+  FD <- get_site_FD() %>%
+    rownames_to_column() %>%
+    mutate(site_id = as.integer(rowname)) %>%
+    dplyr::select(-rowname)
+  
   region_sites[region_sites == 0 ] <- NA
   site_labels <- region_sites %>% 
     gather(region, value, -site_id) %>% 
     na.omit() %>% 
     dplyr::select(-value) %>%
     left_join(., dplyr::select(region_sites, site_id)) %>%
-    left_join(., bbs_routes) %>%
+    left_join(., bbs_sites) %>%
+    left_join(., rownames_to_column(FD), by = "site_id") %>%
     arrange(site_id)
-  
+  ## ^^^ above joins result in multiple regions for each site - not sure what's going on 
 }
 
-bbs_sites <- get_sites_w_region()
+bbs_site_FD <- get_sites_w_region_FD()
 
 sites_in_region <- bbs_sites %>% 
   group_by(region) %>%
@@ -124,10 +131,10 @@ sites_in_region <- bbs_sites %>%
 
 
 #Map dropped sites
-bbs_routes <- get_route_data()
+bbs_sites <- get_sites_sf()
 
-dropped_site_ids <- setdiff(bbs_routes$site_id, bbs_sites$site_id)
-dropped_sites <- bbs_routes %>% filter(site_id %in% dropped_site_ids)
+dropped_site_ids <- setdiff(bbs_sites$site_id, bbs_sites$site_id)
+dropped_sites <- bbs_sites %>% filter(site_id %in% dropped_site_ids)
 
 bcr <- get_ecoreg_shp()
 map_dropped = tm_shape(bcr) + tm_borders()
