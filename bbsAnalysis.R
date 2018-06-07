@@ -34,7 +34,8 @@ get_site_FD <- function(){
   data_path <- paste('./data/', 'FD_stats.RData', sep="")
   if (file.exists(data_path)){
     print("FD present")
-    return(load(data_path))
+    FD_file <- load(data_path)
+    return(as.data.frame(get(FD_file)))
   }else{
     traits <- get_trait_matrix()
     species <- get_species_matrix()
@@ -43,6 +44,8 @@ get_site_FD <- function(){
     save(FD, file = "FD_stats.RData")
   }
 }
+
+FD <- get_site_FD()
 
 #Get Ecoregions for each site
 
@@ -129,3 +132,6 @@ dropped_sites <- bbs_routes %>% filter(site_id %in% dropped_site_ids)
 bcr <- get_ecoreg_shp()
 map_dropped = tm_shape(bcr) + tm_borders()
 map_dropped + tm_shape(dropped_sites) + tm_dots(col = "red")
+
+
+
