@@ -2,6 +2,7 @@ library(tidyverse)
 library(FD)
 library(spData)
 library(sf)
+library(tmap)
 
 trait <- read_csv("data/elton_traits/elton_traits_BirdFuncDat.csv")
 bbs <- read_csv("data/bbs_data.csv") #422 species
@@ -119,3 +120,12 @@ sites_in_region <- bbs_sites %>%
   arrange(n)
 
 
+#Map dropped sites
+bbs_routes <- get_route_data()
+
+dropped_site_ids <- setdiff(bbs_routes$site_id, bbs_sites$site_id)
+dropped_sites <- bbs_routes %>% filter(site_id %in% dropped_site_ids)
+
+bcr <- get_ecoreg_shp()
+map_dropped = tm_shape(bcr) + tm_borders()
+map_dropped + tm_shape(dropped_sites) + tm_dots(col = "red")
