@@ -24,9 +24,9 @@ get_species_matrix <- function(){
 }
 
 #Trait Matrix
-get_trait_matrix <- function(){
+get_trait_matrix <- function(species_list = colnames(species)){ #species_list should be scientific names derived from trait or bbs_trait, bbs isn't neccesarily compatible
   traits <- trait %>%
-    filter(scientific %in% colnames(species)) %>%
+    filter(scientific %in% species_list) %>%
     dplyr::select(-specid, -passnonpass, -iocorder, -blfamilylatin, -blfamilyenglish, -blfamsequid, -taxo, -bodymass_speclevel, -english, -diet_certainty,
            -ends_with("source"), -ends_with("comment"), -ends_with("enteredby")) %>%
     arrange(scientific) %>%
@@ -143,6 +143,24 @@ map_dropped = tm_shape(bcr) + tm_borders()
 map_dropped + tm_shape(dropped_sites) + tm_dots(col = "red")
 
 
+#Simulate null model for one region
+n_rockies_FD <- filter(bbs_site_FD, region == "NORTHERN ROCKIES")
+n_rockies <- bbs_trait %>% 
+  filter(year > min_year & site_id %in% unique(n_rockies_FD$site_id))
 
+species_pool <- unique(n_rockies$scientific)
 
+#for loop option, still need to add database for iterative storage  
+# for(i in 1:length(species_pool)){
+#   samp_trait_mat <- get_trait_matrix(sample(species_pool, i))
+#   sample_FD <- dbFD(samp_trait_mat)
+# }
 
+#try to do it the R way with an apply
+get_sample_fd <- function(x){
+  samp_trait_mat <- get_trait_matrix(sample(species_pool, x))
+  sample_FD <- dbFD(samp_trait_mat)
+  return(c(richness = x, head(sample_FD, -1))) #remove last element, which is the CWM for each trait - maybe add back in later?
+}
+
+test_sim <- plyr::ldply(1:length(species_pool), get_sample_fd()) #should work 
