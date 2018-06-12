@@ -121,7 +121,6 @@ get_sites_w_region_FD <- function(){
     left_join(., bbs_sites) %>%
     left_join(., FD, by = "site_id") %>%
     arrange(site_id)
-  ## ^^^ above joins result in multiple regions for each site - not sure what's going on 
 }
 
 bbs_site_FD <- get_sites_w_region_FD()
@@ -150,17 +149,28 @@ n_rockies <- bbs_trait %>%
 
 species_pool <- unique(n_rockies$scientific)
 
-#for loop option, still need to add database for iterative storage  
-# for(i in 1:length(species_pool)){
-#   samp_trait_mat <- get_trait_matrix(sample(species_pool, i))
-#   sample_FD <- dbFD(samp_trait_mat)
-# }
-
-#try to do it the R way with an apply
 get_sample_fd <- function(x){
   samp_trait_mat <- get_trait_matrix(sample(species_pool, x))
-  sample_FD <- dbFD(samp_trait_mat)
-  return(c(richness = x, head(sample_FD, -1))) #remove last element, which is the CWM for each trait - maybe add back in later?
+  samp_species <- rownames(samp_trait_mat)
+  sample_FD <- dbFD(x = samp_trait_mat)
+  #return(c(richness = x, head(sample_FD, -1))) #remove last element, which is the CWM for each trait - maybe add back in later?
+  return(list("species" = samp_species, "FD" = head(sample_FD, -1)))
 }
 
-test_sim <- plyr::ldply(1:length(species_pool), get_sample_fd()) #should work 
+#test_sim <- plyr::ldply(100:length(species_pool), get_sample_fd()$species) #would work if dbFD didn't error out
+
+FDdf <- data.frame()
+#for loop option, still need to add database for iterative storage
+for(i in 106:length(species_pool)){
+  samp_fd <- get_sample_fd(i)
+  FDdf <- rbind(FDdf, samp_fd$FD)
+}
+
+#recalculate broken case from for loop ^^^
+test_trait_mat <- get_trait_matrix(samp_fd$species)
+test_samp_fd <- dbFD(x = test_trait_mat)
+
+
+#preliminary plot of null curve
+FDdf %>% ggplot(aes(x = nbsp, y = FDiv)) + geom_smooth() +
+  theme_classic()
