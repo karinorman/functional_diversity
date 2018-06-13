@@ -84,7 +84,7 @@ elton_trait <- get_elton_trait()
 
 get_bbs_w_traits <- function(){
   
-  data_path <- paste('./data/', 'bbsTraits.csv', sep = "")
+  data_path <- paste('./data/', 'bbsTraits_master.csv', sep = "")
   if (file.exists(data_path)){
     return(read_csv(data_path))
   }else{
