@@ -160,9 +160,16 @@ get_sample_fd <- function(x){
 #test_sim <- plyr::ldply(100:length(species_pool), get_sample_fd()$species) #would work if dbFD didn't error out
 
 FDdf <- data.frame()
+rich_vals <- c()
 #for loop option, still need to add database for iterative storage
 for(i in 106:length(species_pool)){
-  samp_fd <- get_sample_fd(i)
+  possibleError <- tryCatch(
+    samp_fd <- get_sample_fd(i),
+    error=function(e)e
+  )
+  if(inherits(possibleError, "error")) next
+  
+  rich_vals <- c(rich_vals, i)
   FDdf <- rbind(FDdf, samp_fd$FD)
 }
 
