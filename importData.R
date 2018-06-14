@@ -9,13 +9,13 @@ source("bbs_forecasting_functions.R")
 
 #Adapted from get_bbs_data() from sourced scripts
 get_bbs <- function(){
-  data_path <- paste('./data/', 'bbs', '_data.csv', sep="")
+  data_path <- paste('~/Dropbox/functional-diversity/', 'bbs', '_data.csv', sep="")
   if (file.exists(data_path)){
     return(read_csv(data_path))
     print("yes csv")
   }
   else{
-    if (!db_engine(action='check', db = "~/Dropbox/Data/functional-diversity/bbsforecasting.sqlite",
+    if (!db_engine(action='check', db = "~/Dropbox/Data/functional-diversity/bbsforecasting_old.sqlite", #doesn't work with latest bbs database, probably due to install issues
                    table_to_check = 'breed_bird_survey_counts')){
       print("no database")
       install_dataset('breed-bird-survey')
@@ -66,11 +66,11 @@ bbs <- get_bbs()
 ####Trait Data#####
 ###################
 get_elton_trait <- function(){
-  data_path <- paste('./data/elton_traits/', 'elton_traits', '_BirdFuncDat.csv', sep = "")
+  data_path <- paste('~/Dropbox/functional-diversity/elton_traits/', 'elton_traits', '_BirdFuncDat.csv', sep = "")
   if (file.exists(data_path)){
     return(read_csv(data_path))
   }else{
-    dir.create("data/elton_traits")
+    dir.create("~/Dropbox/functional-diversity/elton_traits")
     rdataretriever::install("elton-traits", 'csv', data_dir = "data/elton_traits")
   }
 }
@@ -82,9 +82,9 @@ elton_trait <- get_elton_trait()
 ### Master CSV  ####
 ####################
 
-get_bbs_w_traits <- function(){
+get_bbs_compatible_sci_names <- function(){
   
-  data_path <- paste('./data/', 'bbs_data_compatible.csv', sep = "")
+  data_path <- paste('~/Dropbox/functional-diversity/', 'bbs_data_compatible.csv', sep = "")
   if (file.exists(data_path)){
     return(read_csv(data_path))
   }else{
@@ -99,7 +99,7 @@ get_bbs_w_traits <- function(){
       left_join(select(elton_trait, scientific, english), 
                 by = c("common_name" = "english")) %>% #join bbs and trait data on common name to see taxanomic equivalents
       rename(bbs_sci = scientific.x, trait_sci = scientific.y) %>%
-      drop.na()
+      drop_na()
     
     
     ## Yellow-rumped warbler = yellow-rumped warbler w/o commentary
@@ -143,19 +143,13 @@ get_bbs_w_traits <- function(){
     }
     
     #get equivalence column for BBS data
-    bbs_compat <- get_compatible_sci_names(bbs, sci_equivalent)
+    bbs_compat <- get_compatible_sci_names(bbs, sci_equivalent) %>%
+      select(-scientific) %>%
+      rename(scientific = compat_sci)
     
-    
-    #Merge bbs
-    bbs_trait <- elton_trait %>%
-      select(-specid, -passnonpass, -iocorder, -blfamilylatin, -blfamilyenglish, -blfamsequid, -taxo, -bodymass_speclevel, -english,
-             -ends_with("source"), -ends_with("comment"), -ends_with("enteredby")) %>%
-      right_join(select(bbs_compat, -scientific), by = c("scientific" = "compat_sci")) %>%
-      filter(!is.na(scientific))
-    
-    write.csv(bbs_trait, file = data_path, row.names = FALSE, quote = FALSE)
-    return(bbs_trait)
+    write.csv(bbs_compat, file = data_path, row.names = FALSE, quote = FALSE)
+    return(bbs_compat)
   }
 }
 
-bbs_trait <- get_bbs_w_traits()
+bbs_compat <- get_bbs_compatible_sci_names()

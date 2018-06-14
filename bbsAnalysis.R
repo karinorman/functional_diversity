@@ -5,16 +5,15 @@ library(spData)
 library(sf)
 library(tmap)
 
-trait <- read_csv("data/elton_traits/elton_traits_BirdFuncDat.csv")
-bbs <- read_csv("data/bbs_data.csv") #422 species
-bbs_trait <- read_csv("data/bbsTraits_master.csv") #414 species, 8 species not merged with trait data, see importData.R for which species and why
+trait <- read_csv("~/Dropbox/functional-diversity/elton_traits/elton_traits_BirdFuncDat.csv")
+bbs <- read_csv("~/Dropbox/functional-diversity/bbs_data_compatible.csv") #422 species
 
 min_year = 2006 #define the minimum year of sampling to include
 p <-  102003 # USA Contiguous Albers Equal Area Conic - planar projection for st_ functions
 
 #Species Matrix  
 get_species_matrix <- function(){
-  species <- bbs_trait %>% #401 species, 4176 sites, some not seen in the time period
+  species <- bbs %>% #401 species, 4176 sites, some not seen in the time period
     filter(year > min_year) %>%
     dplyr::select(scientific, site_id, abundance) %>%
     group_by(scientific, site_id) %>%
@@ -24,7 +23,7 @@ get_species_matrix <- function(){
 }
 
 #Trait Matrix
-get_trait_matrix <- function(species_list = colnames(species)){ #species_list should be scientific names derived from trait or bbs_trait, bbs isn't neccesarily compatible
+get_trait_matrix <- function(species_list = colnames(species)){ 
   traits <- trait %>%
     filter(scientific %in% species_list) %>%
     dplyr::select(-specid, -passnonpass, -iocorder, -blfamilylatin, -blfamilyenglish, -blfamsequid, -taxo, -bodymass_speclevel, -english, -diet_certainty,
@@ -59,7 +58,7 @@ get_ecoreg_shp <- function(){
 
 #get bbs sites for our time period as a spatial dataframe
 get_sites_sf <- function(){
-  spatial_routes <- bbs_trait %>%
+  spatial_routes <- bbs %>%
     filter(year > min_year) %>%
     dplyr::select(site_id, long, lat) %>%
     unique() %>%
@@ -148,7 +147,7 @@ bbs_site_FD <- get_complete_site_data()
 
 #Simulate null model for one region
 n_rockies_FD <- filter(bbs_site_FD, region == "NORTHERN ROCKIES")
-n_rockies <- bbs_trait %>% 
+n_rockies <- bbs %>% 
   filter(year > min_year & site_id %in% unique(n_rockies_FD$site_id))
 
 species_pool <- unique(n_rockies$scientific)
