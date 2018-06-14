@@ -68,82 +68,82 @@ get_sites_sf <- function(){
 }
 
 
-get_sites_w_region_FD <- function(sites = FALSE, buffer = FALSE){
+get_sites_w_region <- function(sites = FALSE, method = c("intersect", "dist")){
+  
   if(!hasArg(sites)) sites <- get_sites_sf()
-  print(length(unique(sites$site_id)))
   
   bcr <- get_ecoreg_shp()
   bcr_names <- unique(bcr$BCRNAME)
-  
-  region_sites <- matrix(ncol = length(bcr_names), nrow = dim(sites)[1])
-  for (i in 1:length(bcr_names)){
-    reg_name <- bcr %>%
-      filter(BCRNAME == bcr_names[i])
-    
-    if (!buffer){
+
+  if (method == "intersect"){
+    region_sites <- matrix(ncol = length(bcr_names), nrow = dim(sites)[1])
+    for (i in 1:length(bcr_names)){
+      reg_name <- bcr %>%
+        filter(BCRNAME == bcr_names[i])
+      
       int_mat <- st_intersects(reg_name, sites, sparse = FALSE)
-    }else{
-      int_mat <- st_intersects(st_buffer(reg_name, dist = buffer), sites, sparse = FALSE)
+      
+      #case when there is more than one polygon, and some intersections are found
+      if (dim(int_mat)[1] > 0 & sum(int_mat > 0)){
+        int_mat <- as.logical(colSums(int_mat))
+      }
+      
+      #case when no intersections are found
+      if (sum(int_mat) == 0){
+        int_mat <- rep(FALSE, dim(sites)[1])
+      }
+      region_sites[,i] <- (int_mat)
     }
     
-    #case when there is more than one polygon, and some intersections are found
-    if (dim(int_mat)[1] > 0 & sum(int_mat > 0)){
-      int_mat <- as.logical(colSums(int_mat))
+    region_sites <- as.data.frame(region_sites)
+    colnames(region_sites) <- bcr_names
+    region_sites <- cbind(site_id = sites$site_id, region_sites)
+    
+    #Check if any sites were classified in two 
+    bad_sites <- apply(dplyr::select(region_sites, -site_id), 1, function(x) length(which(x)))
+    
+    if(max(bad_sites) > 1){
+      warning("One or more sites has been classified to multiple regions")
     }
     
-    #case when no intersections are found
-    if (sum(int_mat) == 0){
-      int_mat <- rep(FALSE, dim(sites)[1])
-    }
-    region_sites[,i] <- (int_mat)
+    region_sites[region_sites == FALSE ] <- NA
+    site_labels <- region_sites %>% 
+      gather(region, value, -site_id) %>% 
+      na.omit() %>% 
+      dplyr::select(-value) %>%
+      left_join(., dplyr::select(region_sites, site_id), by = "site_id") %>%
+      left_join(., sites, by = "site_id") %>%
+      arrange(site_id) %>%
+      st_sf()
   }
   
-  region_sites <- as.data.frame(region_sites)
-  colnames(region_sites) <- bcr_names
-  region_sites <- cbind(site_id = sites$site_id, region_sites)
-  
-  #Check if any sites were classified in two 
-  bad_sites <- apply(dplyr::select(region_sites, -site_id), 1, function(x) length(which(x)))
-  
-  if(max(bad_sites) > 1){
-    warning("One or more sites has been classified to multiple regions")
+  if (method == "dist"){
+    dist <- st_distance(sites, bcr)
+    poly_index <- apply(dist, 1, which.min) #get index of the minimum distance polygon for each site
+    region <- bcr$BCRNAME[poly_index] #get the name of the nearest region by the index
+    site_labels <- cbind(sites, region)
   }
+  return(site_labels)
+}
+
+get_complete_site_data <- function(){
+  continent <- get_sites_w_region(method = "intersect") #get sites that intersect
+  
+  bbs_sites <- get_sites_sf()
+  dropped_site_ids <- dplyr::setdiff(bbs_sites$site_id, continent$site_id) #find dropped
+  dropped_sites <- bbs_sites %>% filter(site_id %in% dropped_site_ids)
+  coast <- get_sites_w_region(sites = dropped_sites, method = "dist") #get sites that were dropped (on the coast)
+  
+  all <- rbind(continent, coast)
   
   FD <- get_site_FD() %>%
     rownames_to_column() %>%
     mutate(site_id = as.integer(rowname)) %>%
-    dplyr::select(-rowname)
-  
-  region_sites[region_sites == FALSE ] <- NA
-  site_labels <- region_sites %>% 
-    gather(region, value, -site_id) %>% 
-    na.omit() %>% 
-    dplyr::select(-value) %>%
-    left_join(., dplyr::select(region_sites, site_id)) %>%
-    left_join(., sites) %>%
-    left_join(., FD, by = "site_id") %>%
-    arrange(site_id)
+    dplyr::select(-rowname) %>%
+    left_join(., all, by = "site_id")
 }
 
-bbs_site_FD <- get_sites_w_region_FD()
-
-sites_in_region <- bbs_site_FD %>% 
-  group_by(region) %>%
-  summarise(n = n()) %>%
-  arrange(n)
-
-
-#Get regions for dropped sites
-bbs_sites <- get_sites_sf()
-
-dropped_site_ids <- dplyr::setdiff(bbs_sites$site_id, bbs_site_FD$site_id)
-dropped_sites <- bbs_sites %>% filter(site_id %in% dropped_site_ids)
-
-extra_sites <- get_sites_w_region_FD(bbs_sites = dropped_sites, buffer = TRUE)
-
-bcr <- get_ecoreg_shp()
-map_dropped = tm_shape(bcr) + tm_borders()
-map_dropped + tm_shape(dropped_sites) + tm_dots(col = "red")
+bbs_site_FD <- get_complete_site_data()
 
 
 #Simulate null model for one region
