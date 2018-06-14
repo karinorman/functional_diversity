@@ -84,7 +84,7 @@ elton_trait <- get_elton_trait()
 
 get_bbs_w_traits <- function(){
   
-  data_path <- paste('./data/', 'bbsTraits_master.csv', sep = "")
+  data_path <- paste('./data/', 'bbs_data_compatible.csv', sep = "")
   if (file.exists(data_path)){
     return(read_csv(data_path))
   }else{
@@ -98,30 +98,38 @@ get_bbs_w_traits <- function(){
       select(scientific, common_name) %>% #select bbs sci name and common name
       left_join(select(elton_trait, scientific, english), 
                 by = c("common_name" = "english")) %>% #join bbs and trait data on common name to see taxanomic equivalents
-      rename(bbs_sci = scientific.x, trait_sci = scientific.y) 
+      rename(bbs_sci = scientific.x, trait_sci = scientific.y) %>%
+      drop.na()
     
     
     ## Yellow-rumped warbler = yellow-rumped warbler w/o commentary
     ## Black-throated Gray Warbler = Black-throated Grey Warbler
     ## Gray Hawk = grey hawk (technically different subspecies?)
-    
-    ###No trait data for: Pacific Wren, Eastern Yellow Wagtail, Sagebrush sparrow, Woodhouse's scrub jay, Bell's sparrow
-    
+    ## Pacific Wren and Winter Wren are grouped into one species Troglodytes troglodytes, Winter wren matches on common name, but Pacific wren needs new sci name
+    ## Easter Yellow Wagtail = Yellow Wagtail
+    ## Sagebrush sparrow and Bell's sparrow are grouped together as sage sparrow
+    ## Woodhouse's scrub jay = Western scrub jay
     
     get_compatible_sci_names <- function(data, sci_equiv){
       #Create a new column called compat_sci that replaces BBS sci names with their trait data equivalent#
       
       #case when formula - one for each row of equivalencies 
-      replace_form <- lapply(1:dim(sci_equiv)[1],function(var) 
+      replace_form <- lapply(1:dim(sci_equiv)[1],function(var){ 
         formula(paste0('data$scientific == as.character(sci_equiv$bbs_sci[',
-                       var, ']) ~ as.character(sci_equiv$trait_sci[', var,'])')))
+                       var, ']) ~ as.character(sci_equiv$trait_sci[', var,'])'))
+      })
       
       #add special cases where neither common or scientific names match, but the species are the same
       ##still don't work, not sure why
       replace_form <- append(replace_form, 
-                             c(formula('data$scientific == \'Setophaga coronata\' ~ \'Dendroica coronata\''),
-                               formula('data$scientific == \'Setophaga nigrescens\' ~ \'Dendroica nigrescens\''),
-                               formula('data$scientific == as.character(\'Buteo plagiatus\') ~ \'Buteo nitidus\'')
+                             c(formula('data$scientific == \'Setophaga coronata\' ~ \'Dendroica coronata\''), #Yellow-rumped Warbler
+                               formula('data$scientific == \'Setophaga nigrescens\' ~ \'Dendroica nigrescens\''), #Black-throated Grey Warbler
+                               formula('data$scientific == as.character(\'Buteo plagiatus\') ~ \'Buteo nitidus\''), #Grey Hawk
+                               formula('data$scientific == as.character(\'Troglodytes pacificus\') ~ \'Troglodytes troglodytes\''), #Pacific Wren
+                               formula('data$scientific == as.character(\'Motacilla tschutschensis\') ~ \'Motacilla flava\''), #Eastern Yellow Wagtail 
+                               formula('data$scientific == as.character(\'Artemisiospiza nevadensis\') ~ \'Amphispiza belli\''), #Sagebrush sparrow
+                               formula('data$scientific == as.character(\'Artemisiospiza belli\') ~ \'Amphispiza belli\''), #Bell's Sparrow
+                               formula('data$scientific == as.character(\'Aphelocoma woodhouseii\') ~ \'Aphelocoma californica\'') #Woodhouse's Scrub jay
                              )
       )
       
