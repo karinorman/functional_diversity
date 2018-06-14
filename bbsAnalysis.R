@@ -10,7 +10,7 @@ bbs <- read_csv("data/bbs_data.csv") #422 species
 bbs_trait <- read_csv("data/bbsTraits_master.csv") #414 species, 8 species not merged with trait data, see importData.R for which species and why
 
 min_year = 2006 #define the minimum year of sampling to include
-p <-  4326 # +proj=longlat +datum=WGS84: Projection for spatial analyses
+p <-  102003 # USA Contiguous Albers Equal Area Conic - planar projection for st_ functions
 
 #Species Matrix  
 get_species_matrix <- function(){
@@ -63,26 +63,28 @@ get_sites_sf <- function(){
     filter(year > min_year) %>%
     dplyr::select(site_id, long, lat) %>%
     unique() %>%
-    st_as_sf(coords = c("long", "lat"), crs = p)
+    st_as_sf(coords = c("long", "lat"), crs = 4326) %>%
+    st_transform(crs = p)
 }
 
 
-get_sites_w_region_FD <- function(){
+get_sites_w_region_FD <- function(sites = FALSE, buffer = FALSE){
+  if(!hasArg(sites)) sites <- get_sites_sf()
+  print(length(unique(sites$site_id)))
+  
   bcr <- get_ecoreg_shp()
-  bbs_sites <- get_sites_sf()
   bcr_names <- unique(bcr$BCRNAME)
   
-  region_sites <- matrix(ncol = length(bcr_names), nrow = dim(bbs_sites)[1])
+  region_sites <- matrix(ncol = length(bcr_names), nrow = dim(sites)[1])
   for (i in 1:length(bcr_names)){
     reg_name <- bcr %>%
       filter(BCRNAME == bcr_names[i])
-    int_mat <- st_intersects(reg_name, bbs_sites, sparse = FALSE)
     
-    # case_when(
-    #   dim(int_mat)[1] > 0 & sum(int_mat) > 0 ~ as.logical(colSums(int_mat)),
-    #   sum(int_mat) == 0 ~ rep(FALSE, dim(bbs_sites)[1]),
-    #   TRUE ~ int_mat
-    # )
+    if (!buffer){
+      int_mat <- st_intersects(reg_name, sites, sparse = FALSE)
+    }else{
+      int_mat <- st_intersects(st_buffer(reg_name, dist = buffer), sites, sparse = FALSE)
+    }
     
     #case when there is more than one polygon, and some intersections are found
     if (dim(int_mat)[1] > 0 & sum(int_mat > 0)){
@@ -91,14 +93,14 @@ get_sites_w_region_FD <- function(){
     
     #case when no intersections are found
     if (sum(int_mat) == 0){
-      int_mat <- rep(FALSE, dim(bbs_sites)[1])
+      int_mat <- rep(FALSE, dim(sites)[1])
     }
     region_sites[,i] <- (int_mat)
   }
   
   region_sites <- as.data.frame(region_sites)
   colnames(region_sites) <- bcr_names
-  region_sites <- cbind(site_id = bbs_sites$site_id, region_sites)
+  region_sites <- cbind(site_id = sites$site_id, region_sites)
   
   #Check if any sites were classified in two 
   bad_sites <- apply(dplyr::select(region_sites, -site_id), 1, function(x) length(which(x)))
@@ -118,7 +120,7 @@ get_sites_w_region_FD <- function(){
     na.omit() %>% 
     dplyr::select(-value) %>%
     left_join(., dplyr::select(region_sites, site_id)) %>%
-    left_join(., bbs_sites) %>%
+    left_join(., sites) %>%
     left_join(., FD, by = "site_id") %>%
     arrange(site_id)
 }
@@ -131,11 +133,13 @@ sites_in_region <- bbs_site_FD %>%
   arrange(n)
 
 
-#Map dropped sites
+#Get regions for dropped sites
 bbs_sites <- get_sites_sf()
 
 dropped_site_ids <- dplyr::setdiff(bbs_sites$site_id, bbs_site_FD$site_id)
 dropped_sites <- bbs_sites %>% filter(site_id %in% dropped_site_ids)
+
+extra_sites <- get_sites_w_region_FD(bbs_sites = dropped_sites, buffer = TRUE)
 
 bcr <- get_ecoreg_shp()
 map_dropped = tm_shape(bcr) + tm_borders()
@@ -149,15 +153,15 @@ n_rockies <- bbs_trait %>%
 
 species_pool <- unique(n_rockies$scientific)
 
-get_sample_fd <- function(x){
+get_sample_fd <- function(x, ...){
   samp_trait_mat <- get_trait_matrix(sample(species_pool, x))
   samp_species <- rownames(samp_trait_mat)
-  sample_FD <- dbFD(x = samp_trait_mat)
+  sample_FD <- dbFD(x = samp_trait_mat, ...)
   #return(c(richness = x, head(sample_FD, -1))) #remove last element, which is the CWM for each trait - maybe add back in later?
   return(list("species" = samp_species, "FD" = head(sample_FD, -1)))
 }
 
-#test_sim <- plyr::ldply(100:length(species_pool), get_sample_fd()$species) #would work if dbFD didn't error out
+#test_sim <- plyr::ldply(100:length(species_pool), get_sample_fd(calc.FRic = FALSE)$species) #would work if dbFD didn't error out
 
 FDdf <- data.frame()
 rich_vals <- c()
@@ -169,7 +173,7 @@ for(i in 106:length(species_pool)){
   )
   if(inherits(possibleError, "error")) next
   
-  rich_vals <- c(rich_vals, i)
+  #rich_vals <- c(rich_vals, i)
   FDdf <- rbind(FDdf, samp_fd$FD)
 }
 
