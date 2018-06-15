@@ -34,17 +34,18 @@ get_trait_matrix <- function(species_list = colnames(species)){
 
 #Get Functional Diversity Metrics  
 get_site_FD <- function(){  
-  data_path <- paste('./data/', 'FD_stats.RData', sep="")
+  data_path <- paste('~/Dropbox/functional-diversity/', 'FD_stats.RData', sep="")
   if (file.exists(data_path)){
     print("FD present")
     FD_file <- load(data_path)
     return(as.data.frame(get(FD_file)))
   }else{
+    print("No FD")
     species <- get_species_matrix()
     traits <- get_trait_matrix()
 
-    FD <- dbFD(traits, species, w.abun = TRUE)
-    save(FD, file = "FD_stats.RData")
+    FD <- as.data.frame(dbFD(traits, species, w.abun = TRUE))
+    save(FD, file = data_path)
   }
 }
 
