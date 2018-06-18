@@ -1,3 +1,4 @@
+source("installPackages.R")
 library(tidyverse)
 library(dplyr)
 library(FD)
