@@ -152,4 +152,4 @@ get_bbs_compatible_sci_names <- function(){
   }
 }
 
-bbs_compat <- get_bbs_compatible_sci_names()
+bbs_trait <- get_bbs_compatible_sci_names()
