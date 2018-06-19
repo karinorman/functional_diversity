@@ -6,23 +6,23 @@ library(stringr)
 ###### BBS ########
 ###################
 
-source("bbs_forecasting_functions.R")
+source("R/bbs_forecasting_functions.R")
 
 #Adapted from get_bbs_data() from sourced scripts
 get_bbs <- function(){
-  data_path <- paste('~/Dropbox/functional-diversity/', 'bbs', '_data.csv', sep="")
+  data_path <- paste('./extdata/', 'bbs', '_data.csv', sep="")
   if (file.exists(data_path)){
     return(read_csv(data_path))
     print("yes csv")
   }
   else{
-    if (!db_engine(action='check', db = "~/Dropbox/Data/functional-diversity/bbsforecasting_old.sqlite", #doesn't work with latest bbs database, probably due to install issues
+    if (!db_engine(action='check', db = "./extdata/bbsforecasting_old.sqlite", #doesn't work with latest bbs database, probably due to install issues
                    table_to_check = 'breed_bird_survey_counts')){
       print("no database")
       install_dataset('breed-bird-survey')
     }
     
-    birds <- DBI::dbConnect(RSQLite::SQLite(), "~/Dropbox/Data/functional-diversity/bbsforecasting_old.sqlite")
+    birds <- DBI::dbConnect(RSQLite::SQLite(), "./extdata/bbsforecasting_old.sqlite")
     
     #save database tables as table in R to use with tidyverse commands
     counts <- tbl(birds, "breed_bird_survey_counts")
@@ -55,7 +55,7 @@ get_bbs <- function(){
       rename (common_name = english_common_name) %>%
       unite(scientific, genus, species, sep = " ")
     
-    write.csv(bbs_clean, file = data_path, row.names = FALSE, quote = FALSE)
+    #write.csv(bbs_clean, file = data_path, row.names = FALSE, quote = FALSE)
     return(bbs_clean)
     
   }
@@ -67,16 +67,17 @@ bbs <- get_bbs()
 ####Trait Data#####
 ###################
 get_elton_trait <- function(){
-  data_path <- paste('~/Dropbox/functional-diversity/elton_traits/', 'elton_traits', '_BirdFuncDat.csv', sep = "")
+  data_path <- paste('./extdata/elton_traits/', 'elton_traits', '_BirdFuncDat.csv', sep = "")
   if (file.exists(data_path)){
     return(read_csv(data_path))
   }else{
-    dir.create("~/Dropbox/functional-diversity/elton_traits")
+    dir.create("./extdata/elton_traits")
     rdataretriever::install("elton-traits", 'csv', data_dir = "data/elton_traits")
+    return(read_csv(data_path))
   }
 }
 
-elton_trait <- get_elton_trait()
+trait <- get_elton_trait()
 
 ####################
 ### BBS & Trait ####
@@ -85,7 +86,7 @@ elton_trait <- get_elton_trait()
 
 get_bbs_compatible_sci_names <- function(){
   
-  data_path <- paste('~/Dropbox/functional-diversity/', 'bbs_data_compatible.csv', sep = "")
+  data_path <- paste('./data/', 'bbs_data_compatible.csv', sep = "")
   if (file.exists(data_path)){
     return(read_csv(data_path))
   }else{
@@ -148,9 +149,11 @@ get_bbs_compatible_sci_names <- function(){
       select(-scientific) %>%
       rename(scientific = compat_sci)
     
-    write.csv(bbs_compat, file = data_path, row.names = FALSE, quote = FALSE)
+    #write.csv(bbs_compat, file = data_path, row.names = FALSE, quote = FALSE)
     return(bbs_compat)
   }
 }
 
-bbs_trait <- get_bbs_compatible_sci_names()
+bbs_trait_compat <- get_bbs_compatible_sci_names()
+
+devtools::use_data(trait, bbs_trait_compat)

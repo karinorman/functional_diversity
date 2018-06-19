@@ -6,8 +6,8 @@ library(spData)
 library(sf)
 library(tmap)
 
-trait <- read_csv("~/Dropbox/functional-diversity/elton_traits/elton_traits_BirdFuncDat.csv")
-bbs <- read_csv("~/Dropbox/functional-diversity/bbs_data_compatible.csv") #422 species
+trait <- load("./data/trait.rda")
+bbs <- read_csv("./data/bbs_trait_compat.rda") 
 
 min_year = 2006 #define the minimum year of sampling to include
 p <-  102003 # USA Contiguous Albers Equal Area Conic - planar projection for st_ functions
@@ -35,7 +35,7 @@ get_trait_matrix <- function(species_list = colnames(species)){
 
 #Get Functional Diversity Metrics  
 get_site_FD <- function(){  
-  data_path <- paste('~/Dropbox/functional-diversity/', 'FD_stats.RData', sep="")
+  data_path <- paste('./data/', 'FD_stats.RData', sep="")
   if (file.exists(data_path)){
     print("FD present")
     FD_file <- load(data_path)
