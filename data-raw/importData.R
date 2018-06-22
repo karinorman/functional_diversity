@@ -1,6 +1,6 @@
-source("installPackages.R")
 library(tidyverse)
 library(stringr)
+library(dbplyr)
 
 ###################
 ###### BBS ########
@@ -61,7 +61,7 @@ get_bbs <- function(){
   }
 }
 
-bbs <- get_bbs()
+bbs_data <- get_bbs()
 
 ###################
 ####Trait Data#####
@@ -92,13 +92,13 @@ get_bbs_compatible_sci_names <- function(){
   }else{
     #join bbs and traits on scientific name to find taxonomic mismatches, 
     #and get a dataframe of taxonomic equivalancies based on common names
-    sci_equivalent <- bbs %>% 
+    sci_equivalent <- bbs_data %>% 
       select(scientific, common_name) %>%
       unique() %>%
-      left_join(select(elton_trait, scientific, english), by = "scientific") %>% #join on scientific name
+      left_join(select(trait, scientific, english), by = "scientific") %>% #join on scientific name
       subset(is.na(english)) %>% #get rows where the scientic names didn't match
       select(scientific, common_name) %>% #select bbs sci name and common name
-      left_join(select(elton_trait, scientific, english), 
+      left_join(select(trait, scientific, english), 
                 by = c("common_name" = "english")) %>% #join bbs and trait data on common name to see taxanomic equivalents
       rename(bbs_sci = scientific.x, trait_sci = scientific.y) %>%
       drop_na()
@@ -145,7 +145,7 @@ get_bbs_compatible_sci_names <- function(){
     }
     
     #get equivalence column for BBS data
-    bbs_compat <- get_compatible_sci_names(bbs, sci_equivalent) %>%
+    bbs_compat <- get_compatible_sci_names(bbs_data, sci_equivalent) %>%
       select(-scientific) %>%
       rename(scientific = compat_sci)
     
@@ -154,6 +154,6 @@ get_bbs_compatible_sci_names <- function(){
   }
 }
 
-bbs_trait_compat <- get_bbs_compatible_sci_names()
+bbs <- get_bbs_compatible_sci_names()
 
 devtools::use_data(trait, bbs_trait_compat)
