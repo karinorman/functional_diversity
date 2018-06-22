@@ -1,4 +1,3 @@
-source("installPackages.R")
 library(tidyverse)
 library(dplyr)
 library(FD)
@@ -10,7 +9,7 @@ trait <- load("./data/trait.rda")
 bbs <- load("./data/bbs_trait_compat.rda") 
 
 min_year = 2006 #define the minimum year of sampling to include
-p <-  102003 # USA Contiguous Albers Equal Area Conic - planar projection for st_ functions
+p <-  102003 # USA Contiguousg Albers Equal Area Conic - planar projection for st_ functions
 
 #Species Matrix  
 get_species_matrix <- function(){
