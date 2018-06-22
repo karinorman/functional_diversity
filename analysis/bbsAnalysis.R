@@ -5,11 +5,30 @@ library(spData)
 library(sf)
 library(tmap)
 
-trait <- load("./data/trait.rda")
-bbs <- load("./data/bbs_trait_compat.rda") 
+piggyback::pb_download(repo = "karinorman/functional_diversity")
+
+load("./data/trait.rda")
+load("./data/bbs_trait_compat.rda")
+bbs <- bbs_trait_compat
 
 min_year = 2006 #define the minimum year of sampling to include
 p <-  102003 # USA Contiguousg Albers Equal Area Conic - planar projection for st_ functions
+
+p <- st_crs(wkt='PROJCS["USA_Contiguous_Albers_Equal_Area_Conic",
+    GEOGCS["GCS_North_American_1983",
+            DATUM["North_American_Datum_1983",
+            SPHEROID["GRS_1980",6378137,298.257222101]],
+            PRIMEM["Greenwich",0],
+            UNIT["Degree",0.017453292519943295]],
+            PROJECTION["Albers_Conic_Equal_Area"],
+            PARAMETER["False_Easting",0],
+            PARAMETER["False_Northing",0],
+            PARAMETER["longitude_of_center",-96],
+            PARAMETER["Standard_Parallel_1",29.5],
+            PARAMETER["Standard_Parallel_2",45.5],
+            PARAMETER["latitude_of_center",37.5],
+            UNIT["Meter",1],
+            AUTHORITY["EPSG","102003"]]')
 
 #Species Matrix  
 get_species_matrix <- function(){
