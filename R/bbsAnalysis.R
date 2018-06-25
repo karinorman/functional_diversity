@@ -1,5 +1,6 @@
 
-#Species Matrix  
+#' Get a species by site matrix from a dataframe of observations
+#' @export
 get_species_matrix <- function(){
   species <- bbs %>% #401 species, 4176 sites, some not seen in the time period
     filter(year > min_year) %>%
@@ -20,7 +21,9 @@ get_trait_matrix <- function(species_list = colnames(species)){
     column_to_rownames(var = "scientific")
 }
 
-#Get Functional Diversity Metrics  
+#' Get the Functional Diversity metrics for all bbs sites, aggregating over a defined time period.
+#' Will use previously calculated FD if it is in the appropriate path
+#' @export
 get_site_FD <- function(){  
   data_path <- paste('./data/', 'FD_stats.RData', sep="")
   if (file.exists(data_path)){
@@ -39,13 +42,16 @@ get_site_FD <- function(){
 
 #Get Ecoregions for each site
 
+#' Read in shapefile for bird conservation regions
+#' @export
 get_ecoreg_shp <- function(){
   bcr <- st_read("data/bcr_shp/BCR_Terrestrial_master.shp") %>%
     st_transform(crs = p) %>%
     filter(REGION %in% c("CANADA", "USA"))
 }
 
-#get bbs sites for our time period as a spatial dataframe
+#' Get bbs sites for our time period as a spatial dataframe
+#' @export
 get_sites_sf <- function(){
   spatial_routes <- bbs %>%
     filter(year > min_year) %>%
@@ -56,6 +62,7 @@ get_sites_sf <- function(){
 }
 
 
+#' Label sites with their conservation region
 get_sites_w_region <- function(sites = FALSE, method = c("intersect", "dist")){
   
   if(!hasArg(sites)) sites <- get_sites_sf()
@@ -114,6 +121,8 @@ get_sites_w_region <- function(sites = FALSE, method = c("intersect", "dist")){
   return(site_labels)
 }
 
+#' Get site-level FD metrics with their region label
+#' @export
 get_complete_site_data <- function(){
   continent <- get_sites_w_region(method = "intersect") #get sites that intersect
   

@@ -4,3 +4,4 @@ Version: 0.0.0.9000
 Authors@R: person("Kari", "Norman", email = "kari.norman@berkeley.edu", role = c("aut", "cre"))
 Depends: dplyr, dbplyr, FD, roxygen2, stringr, sf, spData, tmap, piggyback
 Remotes: cboettig/piggyback
+RoxygenNote: 6.0.1
