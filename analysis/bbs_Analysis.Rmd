@@ -38,18 +38,30 @@ p <- st_crs(wkt='PROJCS["USA_Contiguous_Albers_Equal_Area_Conic",
             AUTHORITY["EPSG","102003"]]')
 
 ```
+We want to be able to figure out if a site's Functional Diversity (FD) is significantly different than what we would expect for a site with that richness level in that region. First we must simulate a null model of the relationship between FD and species diversity for a given region.
 
+Code below attempts to create a null model curve (n = 1) for the Northern Rockies.
 ```{r}
+#site level FD with region assignments
 bbs_site_FD <- get_complete_site_data()
 
 
-#Simulate null model for one region
+###Simulate null model for one region###
+
+#get sites in the Northern rockies region and get species pool for that region
 n_rockies_FD <- filter(bbs_site_FD, region == "NORTHERN ROCKIES")
 n_rockies <- bbs %>% 
-  filter(year > min_year & site_id %in% unique(n_rockies_FD$site_id))
+  filter(year > min_year & site_id %in% unique(n_rockies_FD$site_id)) %>%
+  left_join(., select(n_rockies_FD, site_id, geometry), by = "site_id") #get the geometry column for mapping
+
+n_rockies_sites <- n_rockies %>%
+  select(site_id, geometry) %>%
+  unique() %>%
+  st_as_sf()
 
 species_pool <- unique(n_rockies$scientific)
 
+#function to calculate FD from a list of species
 get_sample_fd <- function(x, ...){
   samp_trait_mat <- get_trait_matrix(sample(species_pool, x))
   samp_species <- rownames(samp_trait_mat)
@@ -60,9 +72,8 @@ get_sample_fd <- function(x, ...){
 
 #test_sim <- plyr::ldply(100:length(species_pool), get_sample_fd(calc.FRic = FALSE)$species) #would work if dbFD didn't error out
 
+#Calculate FD for each sampled community of the given richness, skip richness level if it errors(probably due to memory)
 FDdf <- data.frame()
-rich_vals <- c()
-#for loop option, still need to add database for iterative storage
 for(i in 106:length(species_pool)){
   possibleError <- tryCatch(
     samp_fd <- get_sample_fd(i),
@@ -70,18 +81,29 @@ for(i in 106:length(species_pool)){
   )
   if(inherits(possibleError, "error")) next
   
-  #rich_vals <- c(rich_vals, i)
   FDdf <- rbind(FDdf, samp_fd$FD)
 }
 
-#recalculate broken case from for loop ^^^
-test_trait_mat <- get_trait_matrix(samp_fd$species)
-test_samp_fd <- dbFD(x = test_trait_mat)
+## When the tryCatch isn't in the above for loop, commented code below recalculates FD for the sample/richness level that broke the loop 
+## it doesn't error
+# test_trait_mat <- get_trait_matrix(samp_fd$species)
+# test_samp_fd <- dbFD(x = test_trait_mat)
 
 
 #preliminary plot of null curve
 FDdf %>% ggplot(aes(x = nbsp, y = FDiv)) + geom_smooth() +
   theme_classic()
 
+```
+
+Map of the example ecoregion
+```{r}
+bcr <- functional.diversity::get_ecoreg_shp() %>%
+  mutate(in_region = as.factor(case_when(BCRNAME == "NORTHERN ROCKIES" ~ 1,
+                               TRUE ~ 0)))
+
+ma = tm_shape(bcr) + tm_polygons(col = "in_region", palette = "Greys") +
+  tm_shape(n_rockies_sites) + tm_symbols(size = 0.1 , col = "red")
+ma 
 ```
 
