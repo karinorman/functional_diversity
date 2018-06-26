@@ -11,7 +11,8 @@ get_species_matrix <- function(){
     column_to_rownames(var = "site_id")
 }
 
-#Trait Matrix
+#' Get a species by trait matrix
+#' @export
 get_trait_matrix <- function(species_list = colnames(species)){ 
   traits <- trait %>%
     filter(scientific %in% species_list) %>%
