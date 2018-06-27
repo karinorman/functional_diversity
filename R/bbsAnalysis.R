@@ -1,4 +1,3 @@
-
 #' Get a species by site matrix from a dataframe of observations
 #' @export
 get_species_matrix <- function(){
@@ -11,12 +10,13 @@ get_species_matrix <- function(){
     column_to_rownames(var = "site_id")
 }
 
-#Trait Matrix
+#' Get a species by trait matrix
+#' @export
 get_trait_matrix <- function(species_list = colnames(species)){ 
   traits <- trait %>%
     filter(scientific %in% species_list) %>%
     dplyr::select(-specid, -passnonpass, -iocorder, -blfamilylatin, -blfamilyenglish, -blfamsequid, -taxo, -bodymass_speclevel, -english, -diet_certainty,
-           -ends_with("source"), -ends_with("comment"), -ends_with("enteredby")) %>%
+                  -ends_with("source"), -ends_with("comment"), -ends_with("enteredby")) %>%
     arrange(scientific) %>%
     column_to_rownames(var = "scientific")
 }
@@ -34,7 +34,7 @@ get_site_FD <- function(){
     print("No FD")
     species <- get_species_matrix()
     traits <- get_trait_matrix()
-
+    
     FD <- as.data.frame(dbFD(traits, species, w.abun = TRUE))
     save(FD, file = data_path)
   }
@@ -69,7 +69,7 @@ get_sites_w_region <- function(sites = FALSE, method = c("intersect", "dist")){
   
   bcr <- get_ecoreg_shp()
   bcr_names <- unique(bcr$BCRNAME)
-
+  
   if (method == "intersect"){
     region_sites <- matrix(ncol = length(bcr_names), nrow = dim(sites)[1])
     for (i in 1:length(bcr_names)){
