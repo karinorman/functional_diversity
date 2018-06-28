@@ -62,15 +62,38 @@ n_rockies_sites <- n_rockies %>%
 species_pool <- unique(n_rockies$scientific)
 
 #function to calculate FD from a list of species
-get_sample_fd <- function(x, ...){
-  samp_trait_mat <- get_trait_matrix(sample(species_pool, x))
-  samp_species <- rownames(samp_trait_mat)
+get_sample_fd <- function(x, richness, ...){
+  samp_trait_mat <- get_trait_matrix(sample(species_pool, richness))
   sample_FD <- dbFD(x = samp_trait_mat, ...)
-  #return(c(richness = x, head(sample_FD, -1))) #remove last element, which is the CWM for each trait - maybe add back in later?
-  return(list("species" = samp_species, "FD" = head(sample_FD, -1)))
+  return(head(sample_FD, -1)) #remove last element, which is the CWM for each trait
 }
 
-#test_sim <- plyr::ldply(100:length(species_pool), get_sample_fd(calc.FRic = FALSE)$species) #would work if dbFD didn't error out
+#get sample summary statistics for each richness level observed in a region 
+simulate_null <- function(region_data, n = 1000){
+  
+  richness_levels <- unique(region_data$nbsp)
+  
+  #Get n FD samples for a given richness value
+  null_samples <- function(richness){
+    test <- map(1:n, possibly(get_sample_fd, data.frame()), richness = richness) %>% 
+      bind_rows() %>%
+      select(-nbsp, -sing.sp) %>%
+      gather(factor_key = TRUE) %>%
+      group_by(key) %>%
+      summarise(mean = mean(value), sd = sd(value), max = max(value), min = min(value)) %>%
+      gather(variable, value, -key) %>%
+      unite(temp, key, variable) %>%
+      spread(temp, value) %>%
+      mutate(richness = richness) %>%
+      select(richness, everything())
+  }
+  
+  test_sim <- map(richness_levels, null_samples) %>% 
+    bind_rows()
+    
+}
+
+system.time({n_rockies_null <- simulate_null(n_rockies_FD, n =)})
 
 #Calculate FD for each sampled community of the given richness, skip richness level if it errors(probably due to memory)
 FDdf <- data.frame()
