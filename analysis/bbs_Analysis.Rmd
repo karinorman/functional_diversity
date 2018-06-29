@@ -80,11 +80,15 @@ simulate_null <- function(region_data, n = 1000){
       select(-nbsp, -sing.sp) %>%
       gather(factor_key = TRUE) %>%
       group_by(key) %>%
-      summarise(mean = mean(value), sd = sd(value), max = max(value), min = min(value)) %>%
-      gather(variable, value, -key) %>%
-      unite(temp, key, variable) %>%
-      spread(temp, value) %>%
+      summarise(mean = mean(value), sd = sd(value)) %>%
+      mutate(se = sd/sqrt(n),
+             lowerCI = mean - qt(0.975, n - 1) * se, 
+             upperCI = mean + qt(0.975, n - 1) * se) %>%
+      # gather(variable, value, -key) %>%
+      # unite(temp, key, variable) %>%
+      # spread(temp, value) %>%
       mutate(richness = richness) %>%
+      rename(metric = key) %>%
       select(richness, everything())
   }
   
@@ -93,24 +97,29 @@ simulate_null <- function(region_data, n = 1000){
     
 }
 
-system.time({n_rockies_null <- simulate_null(n_rockies_FD, n =)})
+system.time({n_rockies_null <- simulate_null(n_rockies_FD, n = 10)})
 
-#Calculate FD for each sampled community of the given richness, skip richness level if it errors(probably due to memory)
-FDdf <- data.frame()
-for(i in 106:length(species_pool)){
-  possibleError <- tryCatch(
-    samp_fd <- get_sample_fd(i),
-    error=function(e)e
-  )
-  if(inherits(possibleError, "error")) next
-  
-  FDdf <- rbind(FDdf, samp_fd$FD)
+metric_names <- c("FRic", "qual.FRic", "FEve", "FDiv", "FDis", "RaoQ")
+
+#check if each northern rockies site falls within 
+
+#check if given metric is significant for that site
+check_metric_sig <- function(name){
+    metric_data <- filter(n_rockies_null, richness == site_data$nbsp, metric == name)
+    if (site_data[[name]] < metric_data$upperCI & site_data[[name]] > metric_data$lowerCI){
+      return(TRUE)
+    }else{ return(FALSE)}
+  }  
+
+#check if any metrics are significant for a given site
+check_site_sig <- function(site_data){
+  map(metric_names, check_metric_sig) %>%
+    bind_cols() %>%
+    set_colnames(metric_names)
 }
 
-## When the tryCatch isn't in the above for loop, commented code below recalculates FD for the sample/richness level that broke the loop 
-## it doesn't error
-# test_trait_mat <- get_trait_matrix(samp_fd$species)
-# test_samp_fd <- dbFD(x = test_trait_mat)
+#check significanc of all metrics at all sites
+sig_df <- apply(n_rockies_FD, 1, check_site_sig) %>% bind_rows()
 
 
 #preliminary plot of null curve
