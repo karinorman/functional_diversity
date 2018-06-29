@@ -101,8 +101,6 @@ system.time({n_rockies_null <- simulate_null(n_rockies_FD, n = 10)})
 
 metric_names <- c("FRic", "qual.FRic", "FEve", "FDiv", "FDis", "RaoQ")
 
-#check if each northern rockies site falls within 
-
 #check if given metric is significant for that site
 check_metric_sig <- function(name){
     metric_data <- filter(n_rockies_null, richness == site_data$nbsp, metric == name)
