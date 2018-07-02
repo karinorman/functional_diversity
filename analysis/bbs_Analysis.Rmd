@@ -54,11 +54,6 @@ n_rockies <- bbs %>%
   filter(year > min_year & site_id %in% unique(n_rockies_FD$site_id)) %>%
   left_join(., select(n_rockies_FD, site_id, geometry), by = "site_id") #get the geometry column for mapping
 
-n_rockies_sites <- n_rockies %>%
-  select(site_id, geometry) %>%
-  unique() %>%
-  st_as_sf()
-
 species_pool <- unique(n_rockies$scientific)
 
 #function to calculate FD from a list of species
@@ -128,6 +123,11 @@ FDdf %>% ggplot(aes(x = nbsp, y = FDiv)) + geom_smooth() +
 
 Map of the example ecoregion
 ```{r}
+n_rockies_sites <- n_rockies %>%
+  select(site_id, geometry) %>%
+  unique() %>%
+  st_as_sf()
+
 bcr <- functional.diversity::get_ecoreg_shp() %>%
   mutate(in_region = as.factor(case_when(BCRNAME == "NORTHERN ROCKIES" ~ 1,
                                TRUE ~ 0)))
