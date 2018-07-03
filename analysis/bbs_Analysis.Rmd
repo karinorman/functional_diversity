@@ -12,6 +12,7 @@ library(FD)
 library(spData)
 library(sf)
 library(tmap)
+library(furrr)
 
 
 piggyback::pb_download(repo = "karinorman/functional_diversity")
@@ -55,55 +56,64 @@ n_rockies <- bbs %>%
   filter(year > min_year & site_id %in% unique(n_rockies_FD$site_id)) %>%
   left_join(., select(n_rockies_FD, site_id, geometry), by = "site_id") #get the geometry column for mapping
 
-n_rockies_sites <- n_rockies %>%
-  select(site_id, geometry) %>%
-  unique() %>%
-  st_as_sf()
-
 species_pool <- unique(n_rockies$scientific)
 
 #function to calculate FD from a list of species
-get_sample_fd <- function(x, ...){
-  print(x)
-  samp_trait_mat <- get_trait_matrix(sample(species_pool, x))
-  samp_species <- rownames(samp_trait_mat)
+get_sample_fd <- function(x, richness, ...){
+  samp_trait_mat <- get_trait_matrix(sample(species_pool, richness))
   sample_FD <- dbFD(x = samp_trait_mat, ...)
-  #return(c(richness = x, head(sample_FD, -1))) #remove last element, which is the CWM for each trait - maybe add back in later?
-  #return(list("species" = samp_species, "FD" = head(sample_FD, -1)))
-  return(head(sample_FD, -1))
+  return(head(sample_FD, -1)) #remove last element, which is the CWM for each trait
 }
 
-simulate_null <- function(){
-  test_sim <- map(1:1000, function(x){ 
-  map(10:110, possibly(get_sample_fd, data.frame())) %>% bind_rows()
-  }) %>% bind_rows()
-}
-
-system.time({
-  test_sim <- map(1:1000, function(x){ 
-  map(10:110, possibly(get_sample_fd, data.frame())) %>% bind_rows()
-  }) %>% bind_rows()
-})
-
-#system.time({test_sim <- plyr::ldply(10:110, get_sample_fd()$species)}) #would work if dbFD didn't error out
-
-#Calculate FD for each sampled community of the given richness, skip richness level if it errors(probably due to memory)
-system.time({ FDdf <- data.frame()
-for(i in 10:110){
-  #possibleError <- tryCatch(
-    samp_fd <- get_sample_fd(i)#,
-    #error=function(e)e
-  #)
-  #if(inherits(possibleError, "error")) next
+#get sample summary statistics for each richness level observed in a region 
+simulate_null <- function(region_data, n = 1000){
+  richness_levels <- unique(region_data$nbsp)
   
-  FDdf <- rbind(FDdf, samp_fd)
+  #Get n FD samples for a given richness value
+  null_samples <- function(richness){
+    test <- map_dfr(1:n, possibly(get_sample_fd, data.frame()), richness = richness) %>%
+      select(-nbsp, -sing.sp) %>%
+      gather(factor_key = TRUE) %>%
+      group_by(key) %>%
+      summarise(mean = mean(value), sd = sd(value)) %>%
+      mutate(se = sd/sqrt(n),
+             lowerCI = mean - qt(0.975, n - 1) * se, 
+             upperCI = mean + qt(0.975, n - 1) * se) %>%
+      # gather(variable, value, -key) %>%
+      # unite(temp, key, variable) %>%
+      # spread(temp, value) %>%
+      mutate(richness = richness) %>%
+      rename(metric = key) %>%
+      select(richness, everything())
+  }
+  
+  test_sim <- future_map_dfr(richness_levels[1:10], null_samples)
+    
+>>>>>>> 02713495df1241781a2abcf40131e3954139fe4d
 }
 })
 
-## When the tryCatch isn't in the above for loop, commented code below recalculates FD for the sample/richness level that broke the loop 
-## it doesn't error
-# test_trait_mat <- get_trait_matrix(samp_fd$species)
-# test_samp_fd <- dbFD(x = test_trait_mat)
+plan(multicore)
+system.time({n_rockies_null <- simulate_null(n_rockies_FD, n = 10)})
+
+metric_names <- c("FRic", "qual.FRic", "FEve", "FDiv", "FDis", "RaoQ")
+
+#check if given metric is significant for that site
+check_metric_sig <- function(name){
+    metric_data <- filter(n_rockies_null, richness == site_data$nbsp, metric == name)
+    if (site_data[[name]] < metric_data$upperCI & site_data[[name]] > metric_data$lowerCI){
+      return(TRUE)
+    }else{ return(FALSE)}
+  }  
+
+#check if any metrics are significant for a given site
+check_site_sig <- function(site_data){
+  map_dfc(metric_names, check_metric_sig) %>%
+    set_colnames(metric_names)
+}
+
+#check significanc of all metrics at all sites
+sig_df <- apply(n_rockies_FD, 1, check_site_sig) %>% bind_rows()
 
 
 #preliminary plot of null curve
@@ -114,6 +124,11 @@ FDdf %>% ggplot(aes(x = nbsp, y = FDiv)) + geom_smooth() +
 
 Map of the example ecoregion
 ```{r}
+n_rockies_sites <- n_rockies %>%
+  select(site_id, geometry) %>%
+  unique() %>%
+  st_as_sf()
+
 bcr <- functional.diversity::get_ecoreg_shp() %>%
   mutate(in_region = as.factor(case_when(BCRNAME == "NORTHERN ROCKIES" ~ 1,
                                TRUE ~ 0)))
