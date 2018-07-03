@@ -12,6 +12,7 @@ library(FD)
 library(spData)
 library(sf)
 library(tmap)
+library(furrr)
 
 piggyback::pb_download(repo = "karinorman/functional_diversity")
 
@@ -65,13 +66,11 @@ get_sample_fd <- function(x, richness, ...){
 
 #get sample summary statistics for each richness level observed in a region 
 simulate_null <- function(region_data, n = 1000){
-  
   richness_levels <- unique(region_data$nbsp)
   
   #Get n FD samples for a given richness value
   null_samples <- function(richness){
-    test <- map(1:n, possibly(get_sample_fd, data.frame()), richness = richness) %>% 
-      bind_rows() %>%
+    test <- map_dfr(1:n, possibly(get_sample_fd, data.frame()), richness = richness) %>%
       select(-nbsp, -sing.sp) %>%
       gather(factor_key = TRUE) %>%
       group_by(key) %>%
@@ -87,11 +86,11 @@ simulate_null <- function(region_data, n = 1000){
       select(richness, everything())
   }
   
-  test_sim <- map(richness_levels, null_samples) %>% 
-    bind_rows()
+  test_sim <- future_map_dfr(richness_levels[1:10], null_samples)
     
 }
 
+plan(multicore)
 system.time({n_rockies_null <- simulate_null(n_rockies_FD, n = 10)})
 
 metric_names <- c("FRic", "qual.FRic", "FEve", "FDiv", "FDis", "RaoQ")
@@ -106,8 +105,7 @@ check_metric_sig <- function(name){
 
 #check if any metrics are significant for a given site
 check_site_sig <- function(site_data){
-  map(metric_names, check_metric_sig) %>%
-    bind_cols() %>%
+  map_dfc(metric_names, check_metric_sig) %>%
     set_colnames(metric_names)
 }
 
