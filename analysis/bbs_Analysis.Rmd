@@ -13,6 +13,7 @@ library(spData)
 library(sf)
 library(tmap)
 
+
 piggyback::pb_download(repo = "karinorman/functional_diversity")
 
 load("./data/trait.rda")
@@ -63,26 +64,41 @@ species_pool <- unique(n_rockies$scientific)
 
 #function to calculate FD from a list of species
 get_sample_fd <- function(x, ...){
+  print(x)
   samp_trait_mat <- get_trait_matrix(sample(species_pool, x))
   samp_species <- rownames(samp_trait_mat)
   sample_FD <- dbFD(x = samp_trait_mat, ...)
   #return(c(richness = x, head(sample_FD, -1))) #remove last element, which is the CWM for each trait - maybe add back in later?
-  return(list("species" = samp_species, "FD" = head(sample_FD, -1)))
+  #return(list("species" = samp_species, "FD" = head(sample_FD, -1)))
+  return(head(sample_FD, -1))
 }
 
-#test_sim <- plyr::ldply(100:length(species_pool), get_sample_fd(calc.FRic = FALSE)$species) #would work if dbFD didn't error out
+simulate_null <- function(){
+  test_sim <- map(1:1000, function(x){ 
+  map(10:110, possibly(get_sample_fd, data.frame())) %>% bind_rows()
+  }) %>% bind_rows()
+}
+
+system.time({
+  test_sim <- map(1:1000, function(x){ 
+  map(10:110, possibly(get_sample_fd, data.frame())) %>% bind_rows()
+  }) %>% bind_rows()
+})
+
+#system.time({test_sim <- plyr::ldply(10:110, get_sample_fd()$species)}) #would work if dbFD didn't error out
 
 #Calculate FD for each sampled community of the given richness, skip richness level if it errors(probably due to memory)
-FDdf <- data.frame()
-for(i in 106:length(species_pool)){
-  possibleError <- tryCatch(
-    samp_fd <- get_sample_fd(i),
-    error=function(e)e
-  )
-  if(inherits(possibleError, "error")) next
+system.time({ FDdf <- data.frame()
+for(i in 10:110){
+  #possibleError <- tryCatch(
+    samp_fd <- get_sample_fd(i)#,
+    #error=function(e)e
+  #)
+  #if(inherits(possibleError, "error")) next
   
-  FDdf <- rbind(FDdf, samp_fd$FD)
+  FDdf <- rbind(FDdf, samp_fd)
 }
+})
 
 ## When the tryCatch isn't in the above for loop, commented code below recalculates FD for the sample/richness level that broke the loop 
 ## it doesn't error
