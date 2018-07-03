@@ -15,7 +15,7 @@ library(tmap)
 library(furrr)
 
 
-piggyback::pb_download(repo = "karinorman/functional_diversity")
+#piggyback::pb_download(repo = "karinorman/functional_diversity")
 
 load("./data/trait.rda")
 load("./data/bbs.rda")
@@ -87,38 +87,29 @@ simulate_null <- function(region_data, n = 1000){
       select(richness, everything())
   }
   
-  test_sim <- future_map_dfr(richness_levels[1:10], null_samples)
-    
->>>>>>> 02713495df1241781a2abcf40131e3954139fe4d
+  #test_sim <- future_map_dfr(richness_levels, null_samples)
+  test_sim <- future_map_dfr(richness_levels, null_samples)
 }
-})
 
 plan(multicore)
 system.time({n_rockies_null <- simulate_null(n_rockies_FD, n = 10)})
 
 metric_names <- c("FRic", "qual.FRic", "FEve", "FDiv", "FDis", "RaoQ")
 
-#check if given metric is significant for that site
-check_metric_sig <- function(name){
-    metric_data <- filter(n_rockies_null, richness == site_data$nbsp, metric == name)
-    if (site_data[[name]] < metric_data$upperCI & site_data[[name]] > metric_data$lowerCI){
-      return(TRUE)
-    }else{ return(FALSE)}
-  }  
-
-#check if any metrics are significant for a given site
-check_site_sig <- function(site_data){
-  map_dfc(metric_names, check_metric_sig) %>%
-    set_colnames(metric_names)
-}
-
-#check significanc of all metrics at all sites
-sig_df <- apply(n_rockies_FD, 1, check_site_sig) %>% bind_rows()
-
+FD_sig <- n_rockies_FD %>%
+  select(-sing.sp, -starts_with("CWM")) %>%
+  gather(metric_names, key = "metric", value = "value") %>%
+  left_join(n_rockies_null, by = c("nbsp" = "richness", "metric")) %>%
+  mutate(significant = ifelse(value > lowerCI & value < upperCI, FALSE, TRUE)) %>%
+  select(-c("value","region", "mean", "sd", "se", "lowerCI", "upperCI")) %>%
+  spread(metric, significant)
 
 #preliminary plot of null curve
-FDdf %>% ggplot(aes(x = nbsp, y = FDiv)) + geom_smooth() +
-  theme_classic()
+n_rockies_null %>% 
+  #filter(metric == "FRic") %>%
+  ggplot(aes(x = richness, y = mean)) + geom_smooth() +
+  theme_classic() +
+  facet_grid(.~metric)
 
 ```
 
