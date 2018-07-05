@@ -71,7 +71,8 @@ simulate_null <- function(region_data, n = 1000){
   
   #Get n FD samples for a given richness value
   null_samples <- function(richness){
-    test <- map_dfr(1:n, possibly(get_sample_fd, data.frame()), richness = richness) %>%
+    fds <- map_dfr(1:n, possibly(get_sample_fd, data.frame()), richness = richness) %>%
+      drop.na() #after parallelizing, ocassionally one sample will result in NA for FDiv, still trying to figure out why
       select(-nbsp, -sing.sp) %>%
       gather(factor_key = TRUE) %>%
       group_by(key) %>%
@@ -86,8 +87,7 @@ simulate_null <- function(region_data, n = 1000){
       rename(metric = key) %>%
       select(richness, everything())
   }
-  
-  #test_sim <- future_map_dfr(richness_levels, null_samples)
+
   test_sim <- future_map_dfr(richness_levels, null_samples)
 }
 
