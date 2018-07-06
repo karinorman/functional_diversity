@@ -47,17 +47,6 @@ Code below attempts to create a null model curve (n = 1) for the Northern Rockie
 #site level FD with region assignments
 bbs_site_FD <- get_complete_site_data()
 
-
-###Simulate null model for one region###
-
-#get sites in the Northern rockies region and get species pool for that region
-n_rockies_FD <- filter(bbs_site_FD, region == "NORTHERN ROCKIES")
-n_rockies <- bbs %>% 
-  filter(year > min_year & site_id %in% unique(n_rockies_FD$site_id)) %>%
-  left_join(., select(n_rockies_FD, site_id, geometry), by = "site_id") #get the geometry column for mapping
-
-species_pool <- unique(n_rockies$scientific)
-
 #function to calculate FD from a list of species
 get_sample_fd <- function(x, richness, ...){
   samp_trait_mat <- get_trait_matrix(sample(species_pool, richness))
@@ -72,7 +61,7 @@ simulate_null <- function(region_data, n = 1000){
   #Get n FD samples for a given richness value
   null_samples <- function(richness){
     fds <- map_dfr(1:n, possibly(get_sample_fd, data.frame()), richness = richness) %>%
-      drop.na() #after parallelizing, ocassionally one sample will result in NA for FDiv, still trying to figure out why
+      drop_na() %>% #after parallelizing, ocassionally one sample will result in NA for FDiv, still trying to figure out why
       select(-nbsp, -sing.sp) %>%
       gather(factor_key = TRUE) %>%
       group_by(key) %>%
@@ -91,18 +80,30 @@ simulate_null <- function(region_data, n = 1000){
   test_sim <- future_map_dfr(richness_levels, null_samples)
 }
 
-plan(multicore)
-system.time({n_rockies_null <- simulate_null(n_rockies_FD, n = 10)})
+###Simulate null model for one region###
+get_regional_sig_test <- function(region_name, ...){
+  #get sites in the Northern rockies region and get species pool for that region
+  region_FD <- filter(bbs_site_FD, region == region_name)
+  region_obs <- bbs %>% 
+    filter(year > min_year & site_id %in% unique(region_FD$site_id)) %>%
+    #left_join(., select(region_FD, site_id, geometry), by = "site_id") %>% #get the geometry column for mapping
+    unique(scientific)
+  
+  plan(multicore)
+  system.time({n_rockies_null <- simulate_null(region_FD, ...)})
+  
+  metric_names <- c("FRic", "qual.FRic", "FEve", "FDiv", "FDis", "RaoQ")
+  
+  FD_sig <- region_FD %>%
+    select(-sing.sp, -starts_with("CWM")) %>%
+    gather(metric_names, key = "metric", value = "value") %>%
+    left_join(n_rockies_null, by = c("nbsp" = "richness", "metric")) %>%
+    mutate(significant = ifelse(value > lowerCI & value < upperCI, FALSE, TRUE)) %>%
+    select(-c("value","region", "mean", "sd", "se", "lowerCI", "upperCI")) %>%
+    spread(metric, significant)
+  
+}
 
-metric_names <- c("FRic", "qual.FRic", "FEve", "FDiv", "FDis", "RaoQ")
-
-FD_sig <- n_rockies_FD %>%
-  select(-sing.sp, -starts_with("CWM")) %>%
-  gather(metric_names, key = "metric", value = "value") %>%
-  left_join(n_rockies_null, by = c("nbsp" = "richness", "metric")) %>%
-  mutate(significant = ifelse(value > lowerCI & value < upperCI, FALSE, TRUE)) %>%
-  select(-c("value","region", "mean", "sd", "se", "lowerCI", "upperCI")) %>%
-  spread(metric, significant)
 
 #preliminary plot of null curve
 n_rockies_null %>% 
