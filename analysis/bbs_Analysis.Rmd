@@ -49,8 +49,8 @@ bbs_site_FD <- get_complete_site_data()
 
 #function to calculate FD from a list of species
 get_sample_fd <- function(x, richness, ...){
-  samp_trait_mat <- get_trait_matrix(sample(species_pool, richness))
-  sample_FD <- dbFD(x = samp_trait_mat, ...)
+  samp_trait_mat <- get_trait_matrix(sample(species_pool$scientific, richness)) #sample needs list, so specify the column name to change type 
+  sample_FD <- dbFD(x = samp_trait_mat, w.abun = FALSE, ...)
   return(head(sample_FD, -1)) #remove last element, which is the CWM for each trait
 }
 
@@ -77,33 +77,35 @@ simulate_null <- function(region_data, n = 1000){
       select(richness, everything())
   }
 
-  test_sim <- future_map_dfr(richness_levels, null_samples)
+  test_sim <- future_map_dfr(richness_levels[1:10], null_samples)
 }
 
 ###Simulate null model for one region###
 get_regional_sig_test <- function(region_name, ...){
   #get sites in the Northern rockies region and get species pool for that region
   region_FD <- filter(bbs_site_FD, region == region_name)
-  region_obs <- bbs %>% 
+  species_pool <- bbs %>% 
     filter(year > min_year & site_id %in% unique(region_FD$site_id)) %>%
     #left_join(., select(region_FD, site_id, geometry), by = "site_id") %>% #get the geometry column for mapping
-    unique(scientific)
+    select(scientific) %>%
+    unique() #get column of unique scientific names
   
   plan(multicore)
-  system.time({n_rockies_null <- simulate_null(region_FD, ...)})
+  system.time({null_stats <- simulate_null(region_FD, ...)})
   
   metric_names <- c("FRic", "qual.FRic", "FEve", "FDiv", "FDis", "RaoQ")
   
   FD_sig <- region_FD %>%
     select(-sing.sp, -starts_with("CWM")) %>%
     gather(metric_names, key = "metric", value = "value") %>%
-    left_join(n_rockies_null, by = c("nbsp" = "richness", "metric")) %>%
+    left_join(null_stats, by = c("nbsp" = "richness", "metric")) %>%
     mutate(significant = ifelse(value > lowerCI & value < upperCI, FALSE, TRUE)) %>%
     select(-c("value","region", "mean", "sd", "se", "lowerCI", "upperCI")) %>%
     spread(metric, significant)
   
 }
 
+n_rockies <- get_regional_sig_test("NORTHERN ROCKIES", n = 10)
 
 #preliminary plot of null curve
 n_rockies_null %>% 

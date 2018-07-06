@@ -35,7 +35,7 @@ get_site_FD <- function(){
     species <- get_species_matrix()
     traits <- get_trait_matrix()
     
-    FD <- as.data.frame(dbFD(traits, species, w.abun = TRUE))
+    FD <- as.data.frame(dbFD(traits, species, w.abun = FALSE))
     save(FD, file = data_path)
   }
 }
