@@ -98,7 +98,7 @@ get_regional_sig_test <- function(region_name, ...){
   plan(multicore)
   system.time({null_stats <- simulate_null(region_FD, ...)})
   
-  write_tsv(null_stats, paste0("~/functional_diversity/data-raw/stat/", region_name, ".tsv.bz2"))
+  write_tsv(null_stats, paste0("~/functional_diversity/data/stat/", region_name, ".tsv.bz2"))
   
   metric_names <- c("FRic", "qual.FRic", "FEve", "FDiv", "FDis", "RaoQ")
   
@@ -111,19 +111,25 @@ get_regional_sig_test <- function(region_name, ...){
     select(-c("value","region", "mean", "sd", "se", "lowerCI", "upperCI")) %>%
     spread(metric, significant)
   
-  write_tsv(FD_sig, paste0("~/functional_diversity/data-raw/stat_test/", region_name, ".tsv.bz2"))
+  write_tsv(FD_sig, paste0("~/functional_diversity/data/stat_test/", region_name, ".tsv.bz2"))
   
   return(TRUE)
 }
 
-dir.create("~/functional_diversity/data-raw/sim")
-dir.create("~/functional_diversity/data-raw/stat_test")
+get_metric_sig <- function(){
+  if(!dir.exists("~/functional_diversity/data/stat")){
+    dir.create("~/functional_diversity/data/sim")
+    dir.create("~/functional_diversity/data/stat_test")
+    out <- map(unique(bbs_site_FD$region)[1:10], get_regional_sig_test, n=10)
+  }
+  
+  stat_test <- purrr::map_dfr(fs::dir_ls(path = "~/functional_diversity/data/stat_test/", glob="*.tsv.bz2"), readr::read_tsv, .id = "region")
+}
+
 n_rockies <- get_regional_sig_test("NORTHERN ROCKIES", n = 10)
-
-out <- map(unique(bbs_site_FD$region)[1:10], get_regional_sig_test, n=10)
-stat_test <- purrr::map_dfr(fs::dir_ls(path = "~/functional_diversity/data-raw/stat_test/", glob="*.tsv.bz2"), readr::read_tsv, .id = "region")
-
+  
 ```
+
 ```{r}
 #preliminary plot of null curve
 n_rockies_null %>% 
