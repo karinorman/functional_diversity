@@ -17,8 +17,8 @@ library(furrr)
 
 #piggyback::pb_download(repo = "karinorman/functional_diversity")
 
-load("./data/trait.rda")
-load("./data/bbs.rda")
+load("~/functional_diversity/data/trait.rda")
+load("~/functional_diversity/data/bbs.rda")
 
 
 min_year = 2006 #define the minimum year of sampling to include
@@ -60,23 +60,28 @@ simulate_null <- function(region_data, n = 1000){
   
   #Get n FD samples for a given richness value
   null_samples <- function(richness){
-    fds <- map_dfr(1:n, possibly(get_sample_fd, data.frame()), richness = richness) %>%
-      drop_na() %>% #after parallelizing, ocassionally one sample will result in NA for FDiv, still trying to figure out why
-      select(-nbsp, -sing.sp) %>%
-      gather(factor_key = TRUE) %>%
-      group_by(key) %>%
-      summarise(mean = mean(value), sd = sd(value)) %>%
-      mutate(se = sd/sqrt(n),
-             lowerCI = mean - qt(0.975, n - 1) * se, 
-             upperCI = mean + qt(0.975, n - 1) * se) %>%
-      # gather(variable, value, -key) %>%
-      # unite(temp, key, variable) %>%
-      # spread(temp, value) %>%
-      mutate(richness = richness) %>%
-      rename(metric = key) %>%
-      select(richness, everything())
+    fds <- map_dfr(1:n, possibly(get_sample_fd, data.frame()), richness = richness)
+    
+    if(dim(fds)[1] > 0){
+      fds <-  fds %>%
+        drop_na() %>% #after parallelizing, ocassionally one sample will result in NA for FDiv, still trying to figure out why
+        select(-nbsp, -sing.sp) %>%
+        gather(factor_key = TRUE) %>%
+        group_by(key) %>%
+        summarise(mean = mean(value), sd = sd(value)) %>%
+        mutate(se = sd/sqrt(n),
+               lowerCI = mean - qt(0.975, n - 1) * se, 
+               upperCI = mean + qt(0.975, n - 1) * se) %>%
+        # gather(variable, value, -key) %>%
+        # unite(temp, key, variable) %>%
+        # spread(temp, value) %>%
+        mutate(richness = richness) %>%
+        rename(metric = key) %>%
+        select(richness, everything())
+    }
+    return(fds)
   }
-
+  
   test_sim <- future_map_dfr(richness_levels[1:10], null_samples)
 }
 
@@ -93,8 +98,11 @@ get_regional_sig_test <- function(region_name, ...){
   plan(multicore)
   system.time({null_stats <- simulate_null(region_FD, ...)})
   
+  write_tsv(null_stats, paste0("~/functional_diversity/data-raw/stat/", region_name, ".tsv.bz2"))
+  
   metric_names <- c("FRic", "qual.FRic", "FEve", "FDiv", "FDis", "RaoQ")
   
+  head(region_FD)
   FD_sig <- region_FD %>%
     select(-sing.sp, -starts_with("CWM")) %>%
     gather(metric_names, key = "metric", value = "value") %>%
@@ -103,17 +111,26 @@ get_regional_sig_test <- function(region_name, ...){
     select(-c("value","region", "mean", "sd", "se", "lowerCI", "upperCI")) %>%
     spread(metric, significant)
   
+  write_tsv(FD_sig, paste0("~/functional_diversity/data-raw/stat_test/", region_name, ".tsv.bz2"))
+  
+  return(TRUE)
 }
 
+dir.create("~/functional_diversity/data-raw/sim")
+dir.create("~/functional_diversity/data-raw/stat_test")
 n_rockies <- get_regional_sig_test("NORTHERN ROCKIES", n = 10)
 
+out <- map(unique(bbs_site_FD$region)[1:10], get_regional_sig_test, n=10)
+stat_test <- purrr::map_dfr(fs::dir_ls(path = "~/functional_diversity/data-raw/stat_test/", glob="*.tsv.bz2"), readr::read_tsv, .id = "region")
+
+```
+```{r}
 #preliminary plot of null curve
 n_rockies_null %>% 
   #filter(metric == "FRic") %>%
   ggplot(aes(x = richness, y = mean)) + geom_smooth() +
   theme_classic() +
   facet_grid(.~metric)
-
 ```
 
 Map of the example ecoregion
