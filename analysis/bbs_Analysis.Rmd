@@ -50,18 +50,24 @@ Code below attempts to create a null model curve (n = 1) for the Northern Rockie
 bbs_site_FD <- get_complete_site_data()
 
 #function to calculate FD from a list of species
-get_sample_fd <- function(x, richness, ...){
+get_sample_fd <- function(x, richness, species_pool){
   samp_trait_mat <- get_trait_matrix(sample(species_pool$scientific, richness)) #sample needs list, so specify the column name to change type 
-  sample_FD <- dbFD(x = samp_trait_mat, w.abun = FALSE, ...)
+  sample_FD <- dbFD(x = samp_trait_mat, w.abun = FALSE)
   return(head(sample_FD, -1)) #remove last element, which is the CWM for each trait
 }
 
 #get sample summary statistics for each richness level observed in a region 
 simulate_null <- function(region_data, n = 1000){
+  species_pool <- bbs %>% 
+    filter(year > min_year & site_id %in% unique(region_data$site_id)) %>%
+    #left_join(., select(region_FD, site_id, geometry), by = "site_id") %>% #get the geometry column for mapping
+    select(scientific) %>%
+    unique() #get column of unique scientific names
+
   richness_levels <- unique(region_data$nbsp)
   #Get n FD samples for a given richness value
   null_samples <- function(richness){
-    fds <- map_dfr(1:n, possibly(get_sample_fd, data.frame()), richness = richness)
+    fds <- map_dfr(1:n, possibly(get_sample_fd, data.frame()), richness = richness, species_pool = species_pool)
     
     if(dim(fds)[1] > 0){
       print("yes")
@@ -84,8 +90,7 @@ simulate_null <- function(region_data, n = 1000){
     return(fds)
   }
   
-  test_sim <- future_map_dfr(richness_levels, null_samples, .progress = TRUE)
-  #test_sim <- mclapply(richness_levels, null_samples, mc.cores = 30)
+  test_sim <- future_map_dfr(richness_levels, null_samples) #should be future_map
 }
 
 ###Simulate null model for one region###
@@ -93,14 +98,9 @@ get_regional_sig_test <- function(region_name, ...){
   
   #get sites in the Northern rockies region and get species pool for that region
   region_FD <- dplyr::filter(bbs_site_FD, region == region_name)
-  species_pool <- bbs %>% 
-    filter(year > min_year & site_id %in% unique(region_FD$site_id)) %>%
-    #left_join(., select(region_FD, site_id, geometry), by = "site_id") %>% #get the geometry column for mapping
-    select(scientific) %>%
-    unique() #get column of unique scientific names
-  
+
   plan(multicore)
-  system.time({null_stats <- simulate_null(region_FD, ...)})
+  null_stats <- simulate_null(region_FD, ...)
   
   unique(region_FD$site_id)
   write_tsv(null_stats, paste0("~/functional_diversity/data/stat/", region_name, ".tsv.bz2"))
@@ -124,13 +124,15 @@ get_metric_sig <- function(){
   if(!dir.exists("~/functional_diversity/data/stat")){
     dir.create("~/functional_diversity/data/stat")
     dir.create("~/functional_diversity/data/stat_test")
-    out <- map(unique(bbs_site_FD$region), get_regional_sig_test)
+    out <- map(unique(bbs_site_FD$region)[1:5], get_regional_sig_test, n = 5)
   }
   
   stat_test <- purrr::map_dfr(fs::dir_ls(path = "~/functional_diversity/data/stat_test/", glob="*.tsv.bz2"), readr::read_tsv, .id = "region")
 }
 
-n_rockies <- get_regional_sig_test(region_name = "NORTHERN ROCKIES", n = 10)
+stat_test <- get_metric_sig()
+
+#n_rockies <- get_regional_sig_test(region_name = "CENTRAL HARDWOODS", n = 10)
 stats <- purrr::map_dfr(fs::dir_ls(path = "~/functional_diversity/data/stat/", glob="*.tsv.bz2"), readr::read_tsv, .id = "region")
 
 ```
