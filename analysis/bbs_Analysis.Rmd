@@ -1,6 +1,8 @@
 ---
 title: "BBS Analysis"
 output: html_document
+editor_options: 
+  chunk_output_type: console
 ---
 
 
@@ -57,12 +59,13 @@ get_sample_fd <- function(x, richness, ...){
 #get sample summary statistics for each richness level observed in a region 
 simulate_null <- function(region_data, n = 1000){
   richness_levels <- unique(region_data$nbsp)
-  
+  browser()
   #Get n FD samples for a given richness value
   null_samples <- function(richness){
     fds <- map_dfr(1:n, possibly(get_sample_fd, data.frame()), richness = richness)
     
     if(dim(fds)[1] > 0){
+      print("yes")
       fds <-  fds %>%
         drop_na() %>% #after parallelizing, ocassionally one sample will result in NA for FDiv, still trying to figure out why
         select(-nbsp, -sing.sp) %>%
@@ -82,13 +85,15 @@ simulate_null <- function(region_data, n = 1000){
     return(fds)
   }
   
-  test_sim <- future_map_dfr(richness_levels[1:10], null_samples)
+  #test_sim <- future_map_dfr(richness_levels, null_samples, .progress = TRUE)
+  test_sim <- mclapply(richness_levels, null_samples, mc.cores = 30)
 }
 
 ###Simulate null model for one region###
 get_regional_sig_test <- function(region_name, ...){
+  
   #get sites in the Northern rockies region and get species pool for that region
-  region_FD <- filter(bbs_site_FD, region == region_name)
+  region_FD <- dplyr::filter(bbs_site_FD, region == region_name)
   species_pool <- bbs %>% 
     filter(year > min_year & site_id %in% unique(region_FD$site_id)) %>%
     #left_join(., select(region_FD, site_id, geometry), by = "site_id") %>% #get the geometry column for mapping
@@ -98,11 +103,11 @@ get_regional_sig_test <- function(region_name, ...){
   plan(multicore)
   system.time({null_stats <- simulate_null(region_FD, ...)})
   
+  unique(region_FD$site_id)
   write_tsv(null_stats, paste0("~/functional_diversity/data/stat/", region_name, ".tsv.bz2"))
   
   metric_names <- c("FRic", "qual.FRic", "FEve", "FDiv", "FDis", "RaoQ")
   
-  head(region_FD)
   FD_sig <- region_FD %>%
     select(-sing.sp, -starts_with("CWM")) %>%
     gather(metric_names, key = "metric", value = "value") %>%
@@ -120,14 +125,15 @@ get_metric_sig <- function(){
   if(!dir.exists("~/functional_diversity/data/stat")){
     dir.create("~/functional_diversity/data/sim")
     dir.create("~/functional_diversity/data/stat_test")
-    out <- map(unique(bbs_site_FD$region)[1:10], get_regional_sig_test, n=10)
+    out <- map(unique(bbs_site_FD$region), get_regional_sig_test)
   }
   
   stat_test <- purrr::map_dfr(fs::dir_ls(path = "~/functional_diversity/data/stat_test/", glob="*.tsv.bz2"), readr::read_tsv, .id = "region")
 }
 
-n_rockies <- get_regional_sig_test("NORTHERN ROCKIES", n = 10)
-  
+n_rockies <- get_regional_sig_test(region_name = "APPALACHIAN MOUNTAINS", n = 10)
+stats <- purrr::map_dfr(fs::dir_ls(path = "~/functional_diversity/data/stat/", glob="*.tsv.bz2"), readr::read_tsv, .id = "region")
+
 ```
 
 ```{r}
