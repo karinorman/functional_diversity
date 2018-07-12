@@ -19,8 +19,8 @@ library(furrr)
 
 #piggyback::pb_download(repo = "karinorman/functional_diversity")
 
-load("~/functional_diversity/data/trait.rda")
-load("~/functional_diversity/data/bbs.rda")
+load("~/Documents/Projects/functional_diversity/data/trait.rda")
+load("~/Documents/Projects/functional_diversity/data/bbs.rda")
 
 
 min_year = 2006 #define the minimum year of sampling to include
@@ -51,7 +51,6 @@ bbs_site_FD <- get_complete_site_data()
 
 #function to calculate FD from a list of species
 get_sample_fd <- function(x, richness, species_pool){
-  set.seed(1234)
   samp_trait_mat <- get_trait_matrix(sample(species_pool$scientific, richness)) #sample needs list, so specify the column name to change type 
   sample_FD <- dbFD(x = samp_trait_mat, w.abun = FALSE)
   return(head(sample_FD, -1)) #remove last element, which is the CWM for each trait
@@ -149,19 +148,32 @@ n_rockies_null %>%
   facet_grid(.~metric)
 ```
 
-Map of the example ecoregion
+Map of regions with bbs sites
 ```{r}
-n_rockies_sites <- n_rockies %>%
-  select(site_id, geometry) %>%
-  unique() %>%
-  st_as_sf()
+bcr <- get_ecoreg_shp()
 
-bcr <- functional.diversity::get_ecoreg_shp() %>%
-  mutate(in_region = as.factor(case_when(BCRNAME == "NORTHERN ROCKIES" ~ 1,
-                               TRUE ~ 0)))
+#dissolve region polygons to get rid of state/providence boundaries
+bcr_regions <- lwgeom::st_make_valid(bcr) %>%
+  #filter(COUNTRY %in% c("USA","CANADA")) %>%
+  st_set_precision(-10000) %>%
+  group_by(BCRNAME) %>%
+  summarize()
 
-ma = tm_shape(bcr) + tm_polygons(col = "in_region", palette = "Greys") +
-  tm_shape(n_rockies_sites) + tm_symbols(size = 0.1 , col = "red")
-ma 
+#get basemap
+data("World")
+nam <- st_as_sf(World) %>% 
+  filter(continent == "North America", subregion == "Northern America")
+st_crs(nam) <- 54012
+
+#map
+regions_ma <- tm_shape(nam, projection = p$proj4string) +
+  tm_borders() +
+tm_shape(bcr_regions) +
+  tm_borders("white") +
+  tm_fill(col = "gold2", alpha = 0.25) +
+tm_shape(st_as_sf(bbs_site_FD)) +
+  tm_dots()
+
+regions_ma
 ```
 
