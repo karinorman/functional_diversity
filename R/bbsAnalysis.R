@@ -12,7 +12,7 @@ get_species_matrix <- function(){
 
 #' Get a species by trait matrix
 #' @export
-get_trait_matrix <- function(species_list = colnames(species)){ 
+get_trait_matrix <- function(species_list = unique(filter(bbs, year > min_year)$scientific)){ 
   traits <- trait %>%
     filter(scientific %in% species_list) %>%
     dplyr::select(-specid, -passnonpass, -iocorder, -blfamilylatin, -blfamilyenglish, -blfamsequid, -taxo, -bodymass_speclevel, -english, -diet_certainty,
@@ -45,7 +45,7 @@ get_site_FD <- function(){
 #' Read in shapefile for bird conservation regions
 #' @export
 get_ecoreg_shp <- function(){
-  bcr <- st_read("~/functional_diversity/data/bcr_shp/BCR_Terrestrial_master.shp") %>%
+  bcr <- st_read("~/Documents/functional_diversity/data/bcr_shp/BCR_Terrestrial_master.shp") %>%
     st_transform(crs = p) %>%
     filter(REGION %in% c("CANADA", "USA"))
 }

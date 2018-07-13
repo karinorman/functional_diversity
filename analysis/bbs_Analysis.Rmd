@@ -19,8 +19,8 @@ library(furrr)
 
 #piggyback::pb_download(repo = "karinorman/functional_diversity")
 
-load("~/Documents/Projects/functional_diversity/data/trait.rda")
-load("~/Documents/Projects/functional_diversity/data/bbs.rda")
+load("~/Documents/functional_diversity/data/trait.rda")
+load("~/Documents/functional_diversity/data/bbs.rda")
 
 
 min_year = 2006 #define the minimum year of sampling to include
@@ -176,4 +176,23 @@ tm_shape(st_as_sf(bbs_site_FD)) +
 
 regions_ma
 ```
+
+Example Hypervolume
+```{r}
+master_traits <- get_trait_matrix() %>%
+  rownames_to_column(var = "scientific")
+
+site_traits <- bbs %>%
+  filter(site_id == 2001, year > min_year) %>%
+  select(site_id, scientific) %>%
+  unique() %>%
+  left_join(master_traits, by = "scientific") %>%
+  select(-c(site_id, scientific, diet_5cat, pelagicspecialist, forstrat_speclevel, nocturnal, forstrat_watbelowsurf, forstrat_wataroundsurf)) %>% #remove categorical variables
+  scale(., center = TRUE, scale = TRUE)
+
+vol <- hypervolume(site_traits)
+```
+
+
+
 
