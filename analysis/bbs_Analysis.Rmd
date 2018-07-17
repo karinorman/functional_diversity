@@ -95,6 +95,11 @@ simulate_null <- function(region_data, n = 1000){
   test_sim <- future_map_dfr(richness_levels, null_samples) #should be future_map
 }
 
+get_safe_name <- function(){
+  safe_name <- gsub("/", ".", region_name) %>%
+    gsub(" ", ".", .)
+}
+
 ###Simulate null model for one region###
 get_regional_sig_test <- function(region_name, ...){
   
@@ -104,7 +109,8 @@ get_regional_sig_test <- function(region_name, ...){
   plan(multicore)
   null_stats <- simulate_null(region_FD, ...)
 
-  safe_name <- gsub("/", " ", region_name)
+  
+  safe_name <- get_safe_name(region_name)
   path <- paste0("~/functional_diversity/data/stat/", safe_name, ".tsv.bz2")
   write_tsv(null_stats, path)
   pb_upload(path)
@@ -204,10 +210,10 @@ plot(vol, show.3d = TRUE, show.legend = TRUE,
 ```{r, include=FALSE}
 metric_names <- c("FRic", "qual.FRic", "FEve", "FDiv", "FDis", "RaoQ")
 
-region_name <- "SOUTHERN.ROCKIES.COLORADO.PLATEAU"
-region_stats <- read_tsv(here("data", "stat", paste0(region_name, ".tsv.bz2")))
+region_name <- "APPALACHIAN MOUNTAINS"
+region_stats <- read_tsv(here("data", "stat", paste0(get_safe_name(region_name), ".tsv.bz2")))
 
-region_data <- dplyr::filter(bbs_site_FD, region == "APPALACHIAN MOUNTAINS") %>%
+region_data <- dplyr::filter(bbs_site_FD, region == region_name) %>%
     select(-sing.sp, -starts_with("CWM")) %>%
     gather(metric_names, key = "metric", value = "value") %>%
     left_join(region_stats, by = c("nbsp" = "richness", "metric")) %>%
