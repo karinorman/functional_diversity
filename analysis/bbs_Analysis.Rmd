@@ -104,7 +104,10 @@ get_regional_sig_test <- function(region_name, ...){
   plan(multicore)
   null_stats <- simulate_null(region_FD, ...)
 
-  write_tsv(null_stats, paste0("~/functional_diversity/data/stat/", region_name, ".tsv.bz2"))
+  safe_name <- gsub("/", " ", region_name)
+  path <- paste0("~/functional_diversity/data/stat/", safe_name, ".tsv.bz2")
+  write_tsv(null_stats, path)
+  pb_upload(path)
   
   metric_names <- c("FRic", "qual.FRic", "FEve", "FDiv", "FDis", "RaoQ")
   
@@ -116,17 +119,19 @@ get_regional_sig_test <- function(region_name, ...){
     select(-c("value","region", "mean", "sd", "se", "lowerCI", "upperCI")) %>%
     spread(metric, significant)
   
-  write_tsv(FD_sig, paste0("~/functional_diversity/data/stat_test/", region_name, ".tsv.bz2"))
+  path <- paste0("~/functional_diversity/data/stat_test/", safe_name, ".tsv.bz2")
+  write_tsv(FD_sig, path)
+  pb_upload(path)
   
   return(TRUE)
 }
 
 get_metric_sig <- function(){
   if(!dir.exists(here("data", "stat_test"))){
-    
+
     dir.create(paste0(here(), "/data/stat"))
     dir.create(paste0(here(), "/data/stat_test"))
-    print("yep")
+
     out <- map(unique(bbs_site_FD$region), get_regional_sig_test)
   }
   
