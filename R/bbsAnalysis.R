@@ -25,7 +25,7 @@ get_trait_matrix <- function(species_list = unique(filter(bbs, year > min_year)$
 #' Will use previously calculated FD if it is in the appropriate path
 #' @export
 get_site_FD <- function(){  
-  data_path <- paste('~/functional_diversity/data/', 'FD_stats.RData', sep="")
+  data_path <- paste0(here('data'), '/FD_stats.RData')
   if (file.exists(data_path)){
     print("FD present")
     FD_file <- load(data_path)
@@ -45,7 +45,7 @@ get_site_FD <- function(){
 #' Read in shapefile for bird conservation regions
 #' @export
 get_ecoreg_shp <- function(){
-  bcr <- st_read("~/Documents/functional_diversity/data/bcr_shp/BCR_Terrestrial_master.shp") %>%
+  bcr <- st_read(here("data", "bcr_shp", "BCR_Terrestrial_master.shp")) %>%
     st_transform(crs = p) %>%
     filter(REGION %in% c("CANADA", "USA"))
 }
