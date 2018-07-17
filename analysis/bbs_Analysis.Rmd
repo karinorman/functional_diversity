@@ -157,7 +157,12 @@ bcr_regions <- lwgeom::st_make_valid(bcr) %>%
   #filter(COUNTRY %in% c("USA","CANADA")) %>%
   st_set_precision(-10000) %>%
   group_by(BCRNAME) %>%
-  summarize()
+  summarize() %>%
+  filter(BCRNAME != "NOT RATED") %>%
+   mutate(region_shape = case_when(
+    BCRNAME == "APPALACHIAN MOUNTAINS" ~ TRUE,
+    TRUE ~ FALSE
+  ))
 
 #get basemap
 data("World")
@@ -166,13 +171,14 @@ nam <- st_as_sf(World) %>%
 st_crs(nam) <- 54012
 
 #map
-regions_ma <- tm_shape(nam, projection = p$proj4string) +
-  tm_borders() +
+regions_ma <- #tm_shape(nam, projection = p$proj4string) +
+  #tm_borders() +
 tm_shape(bcr_regions) +
-  tm_borders("white") +
-  tm_fill(col = "gold2", alpha = 0.25) +
+  tm_borders(col = "black") +
+  tm_fill(col = "region_shape", palette = c("white", "sienna"), alpha = 0.25, legend.show = FALSE) +
 tm_shape(st_as_sf(bbs_site_FD)) +
-  tm_dots()
+  tm_dots(col = "nbsp", palette = "Blues") +
+tm_layout(legend.position = c("left", "bottom"))
 
 regions_ma
 ```
@@ -183,16 +189,48 @@ master_traits <- get_trait_matrix() %>%
   rownames_to_column(var = "scientific")
 
 site_traits <- bbs %>%
-  filter(site_id == 2001, year > min_year) %>%
+  filter(site_id == 17016, year > min_year) %>%
   select(site_id, scientific) %>%
   unique() %>%
   left_join(master_traits, by = "scientific") %>%
-  select(-c(site_id, scientific, diet_5cat, pelagicspecialist, forstrat_speclevel, nocturnal, forstrat_watbelowsurf, forstrat_wataroundsurf)) %>% #remove categorical variables
+  #select(-c(site_id, scientific, diet_5cat, pelagicspecialist, forstrat_speclevel, nocturnal, forstrat_watbelowsurf, forstrat_wataroundsurf)) %>% #remove categorical variables
+  select(starts_with("diet"), bodymass_value, -diet_5cat) %>%
   scale(., center = TRUE, scale = TRUE)
 
 vol <- hypervolume(site_traits)
+
+plot(vol, show.3d = TRUE, show.legend = TRUE, 
+     names = c("seed", "", "",""), plot.3d.axes.id = c(7,9,11),
+     contour.type = "ball",
+     color = c("sienna", "black"))
 ```
 
+```{r, include=FALSE}
+metric_names <- c("FRic", "qual.FRic", "FEve", "FDiv", "FDis", "RaoQ")
+
+region_name <- "SOUTHERN.ROCKIES.COLORADO.PLATEAU"
+region_stats <- read_tsv(paste0("data/stat/", region_name, ".tsv.bz2"))
+
+region_data <- dplyr::filter(bbs_site_FD, region == "APPALACHIAN MOUNTAINS") %>%
+    select(-sing.sp, -starts_with("CWM")) %>%
+    gather(metric_names, key = "metric", value = "value") %>%
+    left_join(region_stats, by = c("nbsp" = "richness", "metric")) %>%
+    mutate(significant = ifelse(value > lowerCI & value < upperCI, FALSE, TRUE))
+
+lines <- region_data %>%
+  drop_na() %>%
+  filter(metric %in% c("FDis", "FDiv", "FEve")) %>%
+  #filter(metric == "FDiv") %>%
+  ggplot(aes(x = nbsp)) + 
+    geom_line(aes(y = mean)) +
+    geom_ribbon(aes(ymin = lowerCI, ymax = upperCI), alpha = 0.2) +
+  geom_point(aes(y = value, color = significant)) +
+    scale_color_manual(values = c("chocolate", "#78B7C5")) +
+  theme_classic() +
+  facet_wrap(.~metric, scales = "free", ncol = 1)
+
+lines 
+```
 
 
 
