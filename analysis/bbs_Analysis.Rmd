@@ -95,9 +95,10 @@ simulate_null <- function(region_data, n = 1000){
   test_sim <- future_map_dfr(richness_levels, null_samples) #should be future_map
 }
 
-get_safe_name <- function(){
+get_safe_name <- function(region_name){
   safe_name <- gsub("/", ".", region_name) %>%
     gsub(" ", ".", .)
+  return(safe_name)
 }
 
 ###Simulate null model for one region###
