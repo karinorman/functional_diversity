@@ -139,7 +139,7 @@ get_metric_sig <- function(){
     dir.create(paste0(here(), "/data/stat"))
     dir.create(paste0(here(), "/data/stat_test"))
 
-    out <- map(unique(bbs_site_FD$region), get_regional_sig_test)
+    out <- map(unique(bbs_site_FD$region)[19:36], get_regional_sig_test)
   }
   
   stat_test <- purrr::map_dfr(fs::dir_ls(path = here("data", "stat_test"), glob="*.tsv.bz2"), readr::read_tsv, .id = "region")
@@ -208,6 +208,8 @@ plot(vol, show.3d = TRUE, show.legend = TRUE,
      color = c("sienna", "black"))
 ```
 
+
+Plot simulated and observed metric values for a given region. 
 ```{r, include=FALSE}
 metric_names <- c("FRic", "qual.FRic", "FEve", "FDiv", "FDis", "RaoQ")
 
@@ -223,7 +225,6 @@ region_data <- dplyr::filter(bbs_site_FD, region == region_name) %>%
 lines <- region_data %>%
   drop_na() %>%
   filter(metric %in% c("FDis", "FDiv", "FEve")) %>%
-  #filter(metric == "FDiv") %>%
   ggplot(aes(x = nbsp)) + 
     geom_line(aes(y = mean)) +
     geom_ribbon(aes(ymin = lowerCI, ymax = upperCI), alpha = 0.2) +

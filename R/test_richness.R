@@ -32,4 +32,4 @@ test_richness <- function(original, FD, region_name){
   }
 }
 
-test_richness(original = bbs, FD = bbs_site_FD, region_name = region)
+#test_richness(original = bbs, FD = bbs_site_FD, region_name = region)
