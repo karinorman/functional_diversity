@@ -69,6 +69,12 @@ simulate_null <- function(region_data, n = 1000){
   
   #Get n FD samples for a given richness value
   null_samples <- function(richness){
+    
+    #set working directory to avoid simultaneous writing of vert.txt file by different threads
+    cur <- getwd()
+    fs::dir_create(paste0("tmp_", richness))
+    setwd(paste0("tmp_", richness))
+    
     fds <- map_dfr(1:n, possibly(get_sample_fd, data.frame()), richness = richness, species_pool = species_pool)
     
     if(dim(fds)[1] > 0){
@@ -89,6 +95,11 @@ simulate_null <- function(region_data, n = 1000){
         rename(metric = key) %>%
         select(richness, everything())
     }
+    
+    #delete temporary folders and reset working directory
+    unlink("tmp_*", recursive = TRUE)
+    setwd(cur)
+    
     return(fds)
   }
   
@@ -139,7 +150,7 @@ get_metric_sig <- function(){
     dir.create(paste0(here(), "/data/stat"))
     dir.create(paste0(here(), "/data/stat_test"))
 
-    out <- map(unique(bbs_site_FD$region)[19:36], get_regional_sig_test)
+    out <- map(unique(bbs_site_FD$region), get_regional_sig_test)
   }
   
   stat_test <- purrr::map_dfr(fs::dir_ls(path = here("data", "stat_test"), glob="*.tsv.bz2"), readr::read_tsv, .id = "region")
