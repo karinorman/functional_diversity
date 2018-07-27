@@ -222,29 +222,51 @@ plot(vol, show.3d = TRUE, show.legend = TRUE,
 
 Plot simulated and observed metric values for a given region. 
 ```{r, include=FALSE}
-metric_names <- c("FRic", "qual.FRic", "FEve", "FDiv", "FDis", "RaoQ")
-
-region_name <- "APPALACHIAN MOUNTAINS"
-region_stats <- read_tsv(here("data", "stat", paste0(get_safe_name(region_name), ".tsv.bz2")))
-
-region_data <- dplyr::filter(bbs_site_FD, region == region_name) %>%
+plot_region_metrics <- function(region_name, metrics){
+  
+  region_stats <- read_tsv(here("data", "stat", paste0(get_safe_name(region_name), ".tsv.bz2")))
+  
+  metric_names <- c("FRic", "qual.FRic", "FEve", "FDiv", "FDis", "RaoQ")
+  region_data <- dplyr::filter(bbs_site_FD, region == region_name) %>%
     select(-sing.sp, -starts_with("CWM")) %>%
     gather(metric_names, key = "metric", value = "value") %>%
     left_join(region_stats, by = c("nbsp" = "richness", "metric")) %>%
     mutate(significant = ifelse(value > lowerCI & value < upperCI, FALSE, TRUE))
-
-lines <- region_data %>%
-  drop_na() %>%
-  filter(metric %in% c("FDis", "FDiv", "FEve")) %>%
-  ggplot(aes(x = nbsp)) + 
+  
+  lines <- region_data %>%
+    drop_na() %>%
+    filter(metric %in% metrics) %>%
+    ggplot(aes(x = nbsp)) + 
     geom_line(aes(y = mean)) +
     geom_ribbon(aes(ymin = lowerCI, ymax = upperCI), alpha = 0.2) +
-  geom_point(aes(y = value, color = significant)) +
+    geom_point(aes(y = value, color = significant)) +
     scale_color_manual(values = c("chocolate", "#78B7C5")) +
-  theme_classic() +
-  facet_wrap(.~metric, scales = "free", ncol = 1)
+    theme_classic() +
+    facet_wrap(.~metric, scales = "free", ncol = 1) +
+    ggtitle(region_name)
+  
+  lines
+}
 
-lines 
+plot_region_metrics(region_name = "APPALACHIAN MOUNTAINS", metrics = c("FDis", "FDiv", "FEve"))
+
+
+map(unique(bbs_site_FD$region)[1:18], plot_region_metrics, metrics = c("FDis", "FDiv", "FEve"))
 ```
 
+Plot just simulated Fric for a given region to see if it's fixed.
+```{r}
+plot_fric <- function(region_name){
+  region_stats <- read_tsv(here("data", "stat", paste0(get_safe_name(region_name), ".tsv.bz2")))
+  
+  region_stats %>%
+    filter(metric == "FRic") %>%
+    ggplot(aes(x = richness)) + 
+    geom_line(aes(y = mean)) +
+    geom_ribbon(aes(ymin = lowerCI, ymax = upperCI), alpha = 0.2) +
+    ggtitle(region_name)
+}
 
+map(unique(bbs_site_FD$region)[1:18], plot_fric)
+
+```
