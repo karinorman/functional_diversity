@@ -1,0 +1,98 @@
+---
+title: "dbFD Debug"
+output: html_document
+---
+
+The dbFD function for calculating FD returns very different results (especially for the FRic metric) depending on whether the FD is calculated for all sites at once (by passing a species x site matrix) or FD is calculated individuallly for each site (by passing no species x site matrix, and just a trait matrix for all occuring species at that site). This is probably due to the fact that the principal components analysis - which gives the axes that are inputs for the conves hull calculation - is calculated on the entire trait matrix, so results will vary based on the number/identity of species in the matrix. 
+
+To get around this issue, I've decided to calculate FD for sites grouped by region for both observed data (previously calculated all sites at once) and null model samples (previously calculated one site at a time). However, convhulln returns a pretty indecipherable error when a middling number of sites are passed to calculate all at once. 
+
+```{r}
+library(tidyverse)
+library(dplyr)
+library(FD)
+library(spData)
+library(sf)
+library(tmap)
+library(furrr)
+library(here)
+
+
+#piggyback::pb_download(repo = "karinorman/functional_diversity")
+
+load(here("data", "trait.rda"))
+load(here("data", "bbs.rda"))
+
+data <- bbs %>%
+  filter(year > min_year)
+```
+
+Calculating all sites at once works:
+(this takes a while to run)
+```{r}
+species <- get_species_matrix()
+traits <- get_trait_matrix()
+    
+FD <- as.data.frame(dbFD(traits, species, w.abun = FALSE))
+```
+
+Calculating one by one works, but gives different values than given above ^^^ (FRic is off by many orders of magnitude).
+```{r}
+sites <- unique(data$site_id)[1:30] #just try it for the first 30 sites
+
+###get site FD one by one###
+get_site_fd <- function(site){
+  species <- filter(data, site_id == site) %>%
+    select(scientific) %>%
+    distinct
+  
+  trait_mat <- get_trait_matrix(species$scientific)
+  
+  fd <- dbFD(trait_mat, w.abun = FALSE)
+  return(head(fd, -1))
+}
+
+indv_fd <- map_dfr(sites, get_site_fd)
+```
+
+Calculating those same 30 sites all at once (which is how the function is intended to be used) results in an "error code 4 from qhull".
+```{r}
+### Get FD by the matrix method for a subset of sites
+species <- data %>%
+  filter(site_id %in% sites) %>%
+  select(scientific, site_id, abundance) %>%
+  group_by(scientific, site_id) %>%
+  summarize(m = mean(abundance)) %>% #think about something other than mean?
+  spread(scientific, m) %>%
+  column_to_rownames(var = "site_id")
+
+trait_mat <- get_trait_matrix(colnames(species))
+
+mat_FD <- as.data.frame(dbFD(trait_mat, species, w.abun = FALSE))
+```
+
+The eventual goal is to be able to calculate metrics for a region at a time, code below should do that but results in the same "error code 4 from qhull". For reference, there are 282 sites in the Appalachian mountain region. 
+```{r}
+
+###get Fd by region###
+site_regions <- select(bbs_site_FD, site_id, region)
+
+get_region_fd <- function(region_name){
+  sites_in_region <- filter(site_regions, region == region_name)
+  
+  species <- data %>%
+    filter(site_id %in% sites_in_region$site_id) %>%
+    select(scientific, site_id, abundance) %>%
+    group_by(scientific, site_id) %>%
+    summarize(m = mean(abundance)) %>% #think about something other than mean?
+    spread(scientific, m) %>%
+    column_to_rownames(var = "site_id")
+  
+  trait_mat <- get_trait_matrix(colnames(species))
+  
+  mat_FD <- dbFD(trait_mat, species, w.abun = FALSE)
+}
+
+app <- get_region_fd("APPALACHIAN MOUNTAINS")
+```
+
