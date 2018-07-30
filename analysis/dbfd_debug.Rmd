@@ -16,13 +16,15 @@ library(sf)
 library(tmap)
 library(furrr)
 library(here)
+library(functional.diversity)
 
-
-#piggyback::pb_download(repo = "karinorman/functional_diversity")
+piggyback::pb_download(repo = "karinorman/functional_diversity", dest=here())
 
 load(here("data", "trait.rda"))
 load(here("data", "bbs.rda"))
 
+# Note, min year not defined
+min_year <- 1967
 data <- bbs %>%
   filter(year > min_year)
 ```
@@ -30,6 +32,7 @@ data <- bbs %>%
 Calculating all sites at once works:
 (this takes a while to run)
 ```{r}
+# A bit supicious that these functions do not take arguments...
 species <- get_species_matrix()
 traits <- get_trait_matrix()
     
