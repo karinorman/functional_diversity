@@ -50,12 +50,36 @@ Code below attempts to create a null model curve (n = 1) for the Northern Rockie
 #site level FD with region assignments
 bbs_site_FD <- get_complete_site_data()
 
-#function to calculate FD from a list of species
-get_sample_fd <- function(x, richness, species_pool){
-  samp_trait_mat <- get_trait_matrix(sample(species_pool$scientific, richness)) #sample needs list, so specify the column name to change type 
-  sample_FD <- dbFD(x = samp_trait_mat, w.abun = FALSE)
-  return(head(sample_FD, -1)) #remove last element, which is the CWM for each trait
+get_region_samples <- function(region_name){
+  region_data <- filter(bbs_site_FD, region == region_name)
+  rich_levels <- unique(region_data$nbsp)
+  
+  species_pool <- bbs %>% 
+    filter(year > min_year & site_id %in% unique(region_data$site_id)) %>%
+    select(scientific) %>%
+    unique() #get column of unique scientific names
+  
+  get_samp_species <- function(richness){
+    samp_species <- sample(species_pool$scientific, richness)
+    df <- cbind(richness, samp_species)
+    return(df)
+  }
+  
+  region_samples <- data.frame()
+  for(i in rich_levels){region_samples <- rbind(region_samples, get_samp_species(i))}
+  region_samples %>%
+    mutate(value = 1) %>%
+    arrange(samp_species) %>% #get species in alphabetical order
+    spread(samp_species, value) %>%
+    select(-richness)
+    
 }
+
+first_sample <- map_dfr(unique(bbs_site_FD$region), get_region_samples) %>%
+    select(sort(current_vars())) #sort columns to be in alphabetical order, required for dbFDI()
+sample_trait_mat <- get_trait_matrix(colnames(first_sample))
+sample_fd <- dbFD(x = sample_trait_mat, a = first_sample, w.abun = FALSE)
+
 
 #get sample summary statistics for each richness level observed in a region 
 simulate_null <- function(region_data, n = 1000){
@@ -222,51 +246,29 @@ plot(vol, show.3d = TRUE, show.legend = TRUE,
 
 Plot simulated and observed metric values for a given region. 
 ```{r, include=FALSE}
-plot_region_metrics <- function(region_name, metrics){
-  
-  region_stats <- read_tsv(here("data", "stat", paste0(get_safe_name(region_name), ".tsv.bz2")))
-  
-  metric_names <- c("FRic", "qual.FRic", "FEve", "FDiv", "FDis", "RaoQ")
-  region_data <- dplyr::filter(bbs_site_FD, region == region_name) %>%
+metric_names <- c("FRic", "qual.FRic", "FEve", "FDiv", "FDis", "RaoQ")
+
+region_name <- "APPALACHIAN MOUNTAINS"
+region_stats <- read_tsv(here("data", "stat", paste0(get_safe_name(region_name), ".tsv.bz2")))
+
+region_data <- dplyr::filter(bbs_site_FD, region == region_name) %>%
     select(-sing.sp, -starts_with("CWM")) %>%
     gather(metric_names, key = "metric", value = "value") %>%
     left_join(region_stats, by = c("nbsp" = "richness", "metric")) %>%
     mutate(significant = ifelse(value > lowerCI & value < upperCI, FALSE, TRUE))
-  
-  lines <- region_data %>%
-    drop_na() %>%
-    filter(metric %in% metrics) %>%
-    ggplot(aes(x = nbsp)) + 
+
+lines <- region_data %>%
+  drop_na() %>%
+  filter(metric %in% c("FDis", "FDiv", "FEve")) %>%
+  ggplot(aes(x = nbsp)) + 
     geom_line(aes(y = mean)) +
     geom_ribbon(aes(ymin = lowerCI, ymax = upperCI), alpha = 0.2) +
-    geom_point(aes(y = value, color = significant)) +
+  geom_point(aes(y = value, color = significant)) +
     scale_color_manual(values = c("chocolate", "#78B7C5")) +
-    theme_classic() +
-    facet_wrap(.~metric, scales = "free", ncol = 1) +
-    ggtitle(region_name)
-  
-  lines
-}
+  theme_classic() +
+  facet_wrap(.~metric, scales = "free", ncol = 1)
 
-plot_region_metrics(region_name = "APPALACHIAN MOUNTAINS", metrics = c("FDis", "FDiv", "FEve"))
-
-
-map(unique(bbs_site_FD$region)[1:18], plot_region_metrics, metrics = c("FDis", "FDiv", "FEve"))
+lines 
 ```
 
-Plot just simulated Fric for a given region to see if it's fixed.
-```{r}
-plot_fric <- function(region_name){
-  region_stats <- read_tsv(here("data", "stat", paste0(get_safe_name(region_name), ".tsv.bz2")))
-  
-  region_stats %>%
-    filter(metric == "FRic") %>%
-    ggplot(aes(x = richness)) + 
-    geom_line(aes(y = mean)) +
-    geom_ribbon(aes(ymin = lowerCI, ymax = upperCI), alpha = 0.2) +
-    ggtitle(region_name)
-}
 
-map(unique(bbs_site_FD$region)[1:18], plot_fric)
-
-```
