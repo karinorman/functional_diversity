@@ -44,8 +44,6 @@ p <- st_crs(wkt='PROJCS["USA_Contiguous_Albers_Equal_Area_Conic",
 
 ```
 We want to be able to figure out if a site's Functional Diversity (FD) is significantly different than what we would expect for a site with that richness level in that region. First we must simulate a null model of the relationship between FD and species diversity for a given region.
-
-Code below attempts to create a null model curve (n = 1) for the Northern Rockies.
 ```{r}
 #site level FD with region assignments
 bbs_site_FD <- get_complete_site_data()
@@ -68,19 +66,41 @@ get_region_samples <- function(region_name){
   region_samples <- data.frame()
   for(i in rich_levels){region_samples <- rbind(region_samples, get_samp_species(i))}
   region_samples %>%
-    mutate(value = 1) %>%
-    arrange(samp_species) %>% #get species in alphabetical order
-    spread(samp_species, value) %>%
-    select(-richness)
+    mutate(value = 1, region = region_name) %>%
+    spread(samp_species, value) #%>%
+    #mutate(region = region_name)
     
 }
 
-first_sample <- map_dfr(unique(bbs_site_FD$region), get_region_samples) %>%
+get_sample_FD <- function(x){
+  #get random sample for each region and richness level
+  sample_occurrence <- map_dfr(unique(bbs_site_FD$region), get_region_samples) 
+  
+  sample_species_mat <- select(sample_occurrence, -richness, -region) %>% #want only species x site info
     select(sort(current_vars())) #sort columns to be in alphabetical order, required for dbFDI()
-sample_trait_mat <- get_trait_matrix(colnames(first_sample))
-sample_fd <- dbFD(x = sample_trait_mat, a = first_sample, w.abun = FALSE)
+  sample_trait_mat <- get_trait_matrix(colnames(sample_species_mat))
 
+  sample_fd <- as.data.frame(dbFD(x = sample_trait_mat, a = sample_species_mat, w.abun = FALSE))
+ 
+  df <- sample_occurrence %>%
+    select(region, richness) %>%
+    bind_cols(sample_fd) %>%
+    mutate(merge_test = case_when(
+      richness == nbsp ~ TRUE,
+      TRUE ~ FALSE
+    ))
+  
+  if(sum(df$merge_test) != dim(df)[1]) warning("richness and region columns may not have been appropriately joined with FD data")
+  
+  path <- paste0(here(), "/data/fd_samples/", 1, "_tmp.tsv.bz2")
+  write_tsv(df, path)
+}
 
+dir.create(paste0(here(), "/data/fd_samples"))
+out <- future_map(1:4, get_sample_FD)
+```
+
+```{r}
 #get sample summary statistics for each richness level observed in a region 
 simulate_null <- function(region_data, n = 1000){
   
