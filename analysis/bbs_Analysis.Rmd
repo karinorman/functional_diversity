@@ -45,6 +45,9 @@ p <- st_crs(wkt='PROJCS["USA_Contiguous_Albers_Equal_Area_Conic",
 
 ```
 We want to be able to figure out if a site's Functional Diversity (FD) is significantly different than what we would expect for a site with that richness level in that region. First we must simulate a null model of the relationship between FD and species diversity for a given region.
+
+
+Simulation functions
 ```{r}
 #site level FD with region assignments
 bbs_site_FD <- get_complete_site_data()
@@ -104,12 +107,36 @@ get_sample_FD <- function(x){
   write_tsv(df, path)
   pb_upload(path)
 }
+```
+
+Simulations
+```{r}
+
+n <- 1000 #sample size
 
 if(!dir.exists(here("data", "fd_samples"))){
   dir.create(paste0(here(), "/data/fd_samples"))
   system.time({out <- future_map(2:45, get_sample_FD)})
 }
 
+sim <- purrr::map_dfr(fs::dir_ls(path = here("data", "fd_samples"), glob="*.tsv.bz2"), readr::read_tsv, .id = "sample")
+
+means <- sim %>%
+  select(region, richness, FEve, FRic, FDis, RaoQ, starts_with("CWM")) %>%
+  group_by(region, richness) %>%
+  summarise_all(mean) %>%
+  gather("metric", "mean", -c(region, richness))
+
+sds <- sim %>%
+  select(region, richness, FEve, FRic, FDis, RaoQ, starts_with("CWM")) %>%
+  group_by(region, richness) %>%
+  summarise_all(sd) %>%
+  gather("metric", "sd", -c(region, richness))
+
+stats <- left_join(means, sds, by = c("region", "richness", "metric")) %>%
+  mutate(se = sd/sqrt(n),
+         lowerCI = mean - qt(0.975, n - 1) * se, 
+         upperCI = mean + qt(0.975, n - 1) * se)  
 ```
 
 ```{r}
@@ -278,7 +305,7 @@ plot(vol, show.3d = TRUE, show.legend = TRUE,
 
 Plot simulated and observed metric values for a given region. 
 ```{r, include=FALSE}
-metric_names <- c("FRic", "qual.FRic", "FEve", "FDiv", "FDis", "RaoQ")
+metric_names <- c("FRic", "qual.FRic", "FEve", "FDis", "RaoQ")
 
 region_name <- "APPALACHIAN MOUNTAINS"
 region_stats <- read_tsv(here("data", "stat", paste0(get_safe_name(region_name), ".tsv.bz2")))
