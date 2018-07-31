@@ -16,9 +16,10 @@ library(sf)
 library(tmap)
 library(furrr)
 library(here)
+library(functional.diversity)
 
 
-#piggyback::pb_download(repo = "karinorman/functional_diversity")
+piggyback::pb_download(repo = "karinorman/functional_diversity", dest = here())
 
 load(here("data", "trait.rda"))
 load(here("data", "bbs.rda"))
@@ -92,12 +93,16 @@ get_sample_FD <- function(x){
   
   if(sum(df$merge_test) != dim(df)[1]) warning("richness and region columns may not have been appropriately joined with FD data")
   
-  path <- paste0(here(), "/data/fd_samples/", 1, "_tmp.tsv.bz2")
+  path <- paste0(here(), "/data/fd_samples/", x, "_tmp.tsv.bz2")
   write_tsv(df, path)
+  pb_upload(path)
 }
 
-dir.create(paste0(here(), "/data/fd_samples"))
-out <- future_map(1:4, get_sample_FD)
+if(!dir.exists(here("data", "fd_samples"))){
+  dir.create(paste0(here(), "/data/fd_samples"))
+  system.time({out <- future_map(2:45, get_sample_FD)})
+}
+
 ```
 
 ```{r}
