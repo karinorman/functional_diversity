@@ -73,13 +73,20 @@ get_region_samples <- function(region_name){
     
 }
 
+#drop trait columns that are the same value for every observation, and therefore providing no additional info
+clean_trait_matrix <- function(trait_matrix){
+  uniq_vals <- sapply(trait_matrix, function(x){length(unique(x))}) #get number of unique values of each trait
+  col_names <- names(which(uniq_vals == 1)) #find columns where there is only one value for all observations
+  return(select(trait_matrix, -col_names))
+}
+
 get_sample_FD <- function(x){
   #get random sample for each region and richness level
   sample_occurrence <- map_dfr(unique(bbs_site_FD$region), get_region_samples) 
   
   sample_species_mat <- select(sample_occurrence, -richness, -region) %>% #want only species x site info
     select(sort(current_vars())) #sort columns to be in alphabetical order, required for dbFDI()
-  sample_trait_mat <- get_trait_matrix(colnames(sample_species_mat))
+  sample_trait_mat <- clean_trait_matrix(get_trait_matrix(colnames(sample_species_mat)))
 
   sample_fd <- as.data.frame(dbFD(x = sample_trait_mat, a = sample_species_mat, w.abun = FALSE))
  
