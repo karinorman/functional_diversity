@@ -19,7 +19,7 @@ library(here)
 library(functional.diversity)
 
 
-piggyback::pb_download(repo = "karinorman/functional_diversity", dest = here())
+#piggyback::pb_download(repo = "karinorman/functional_diversity", dest = here())
 
 load(here("data", "trait.rda"))
 load(here("data", "bbs.rda"))
@@ -167,7 +167,7 @@ regions_ma <- #tm_shape(nam, projection = p$proj4string) +
   #tm_borders() +
 tm_shape(bcr_regions) +
   tm_borders(col = "black") +
-  tm_fill(col = "region_shape", palette = c("white", "sienna"), alpha = 0.25, legend.show = FALSE) +
+  #tm_fill(col = "region_shape", palette = c("white", "sienna"), alpha = 0.25, legend.show = FALSE) +
 tm_shape(st_as_sf(bbs_site_FD)) +
   tm_dots(col = "nbsp", palette = "Blues") +
 tm_layout(legend.position = c("left", "bottom"))
@@ -200,31 +200,47 @@ plot(vol, show.3d = TRUE, show.legend = TRUE,
 
 Plot simulated and observed metric values for a given region. 
 ```{r, include=FALSE}
-metric_names <- c("FRic", "qual.FRic", "FEve", "FDis", "RaoQ")
 
-
-region_stats <- read_tsv(here("data", "stat", paste0(get_safe_name(region_name), ".tsv.bz2")))
-
-
-region_name <- "APPALACHIAN MOUNTAINS"
-region_data <- filter(bbs_site_FD, region == region_name) %>%
+plot_region_metrics <- function(region_name){
+  
+  region_data <- filter(bbs_site_FD, region == region_name) %>%
     select(-sing.sp) %>%
     gather(unique(stats$metric), key = "metric", value = "observed") %>%
     left_join(filter(stats, region == region_name), by = c("nbsp" = "richness", "metric", "region")) %>%
-    mutate(significant = ifelse(observed > lowerCI & observed < upperCI, FALSE, TRUE), observed = as.numeric(observed))
-
-lines <- region_data %>%
-  #drop_na() %>%
-  filter(metric %in% c("FDis", "FRic", "FEve")) %>%
-  ggplot(aes(x = nbsp)) + 
+    mutate(significant = ifelse(observed > lowerCI & observed < upperCI, FALSE, TRUE), 
+           observed = as.numeric(observed))
+  
+  lines <- region_data %>%
+    filter(metric %in% c("FDis", "FRic", "FEve")) %>%
+    ggplot(aes(x = nbsp)) + 
     geom_line(aes(y = mean)) +
     geom_ribbon(aes(ymin = lowerCI, ymax = upperCI), alpha = 0.2) +
-  geom_point(aes(y = observed, color = significant)) +
+    geom_point(aes(y = observed, color = significant)) +
     scale_color_manual(values = c("chocolate", "#78B7C5")) +
-  theme_classic() +
-  facet_wrap(.~metric, scales = "free", ncol = 1)
+    theme_classic() +
+    facet_wrap(.~metric, scales = "free", ncol = 1) +
+    ggtitle(region_name)
+  
+  lines
+}
 
-lines 
+plot_region_metrics(region_name = "APPALACHIAN MOUNTAINS")
+
+map(unique(bbs_site_FD$region), plot_region_metrics)
+
 ```
 
+Plot just simulated Fric for a given region to see if it's fixed.
+```{r}
+plot_fric <- function(region_name){
+  filter(stats, region == region_name) %>%
+    filter(metric == "FRic") %>%
+    ggplot(aes(x = richness)) + 
+    geom_line(aes(y = mean)) +
+    geom_ribbon(aes(ymin = lowerCI, ymax = upperCI), alpha = 0.2) +
+    ggtitle(region_name)
+}
 
+map(unique(bbs_site_FD$region)[1:18], plot_fric)
+
+```
