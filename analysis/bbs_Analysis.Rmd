@@ -45,6 +45,9 @@ p <- st_crs(wkt='PROJCS["USA_Contiguous_Albers_Equal_Area_Conic",
 
 ```
 We want to be able to figure out if a site's Functional Diversity (FD) is significantly different than what we would expect for a site with that richness level in that region. First we must simulate a null model of the relationship between FD and species diversity for a given region.
+
+
+Simulation functions
 ```{r}
 #site level FD with region assignments
 bbs_site_FD <- get_complete_site_data()
@@ -114,111 +117,36 @@ if(!dir.exists(here("data", "fd_samples"))){
 
 ```
 
+Simulations
 ```{r}
-#get sample summary statistics for each richness level observed in a region 
-simulate_null <- function(region_data, n = 1000){
-  
-  species_pool <- bbs %>% 
-    filter(year > min_year & site_id %in% unique(region_data$site_id)) %>%
-    select(scientific) %>%
-    unique() #get column of unique scientific names
 
-  richness_levels <- unique(region_data$nbsp)
-  
-  #Get n FD samples for a given richness value
-  null_samples <- function(richness){
-    
-    #set working directory to avoid simultaneous writing of vert.txt file by different threads
-    cur <- getwd()
-    fs::dir_create(paste0("tmp_", richness))
-    setwd(paste0("tmp_", richness))
-    
-    fds <- map_dfr(1:n, possibly(get_sample_fd, data.frame()), richness = richness, species_pool = species_pool)
-    
-    if(dim(fds)[1] > 0){
-      print("yes")
-      fds <-  fds %>%
-        drop_na() %>% #after parallelizing, ocassionally one sample will result in NA for FDiv, still trying to figure out why
-        select(-nbsp, -sing.sp) %>%
-        gather(factor_key = TRUE) %>%
-        group_by(key) %>%
-        summarise(mean = mean(value), sd = sd(value)) %>%
-        mutate(se = sd/sqrt(n),
-               lowerCI = mean - qt(0.975, n - 1) * se, 
-               upperCI = mean + qt(0.975, n - 1) * se) %>%
-        # gather(variable, value, -key) %>%
-        # unite(temp, key, variable) %>%
-        # spread(temp, value) %>%
-        mutate(richness = richness) %>%
-        rename(metric = key) %>%
-        select(richness, everything())
-    }
-    
-    #delete temporary folders and reset working directory
-    unlink("tmp_*", recursive = TRUE)
-    setwd(cur)
-    
-    return(fds)
-  }
-  
-  test_sim <- future_map_dfr(richness_levels, null_samples) #should be future_map
+n <- 1000 #sample size
+
+if(!dir.exists(here("data", "fd_samples"))){
+  dir.create(paste0(here(), "/data/fd_samples"))
+  system.time({out <- future_map(2:45, get_sample_FD)})
 }
 
-get_safe_name <- function(region_name){
-  safe_name <- gsub("/", ".", region_name) %>%
-    gsub(" ", ".", .)
-  return(safe_name)
-}
+sim <- purrr::map_dfr(fs::dir_ls(path = here("data", "fd_samples"), glob="*.tsv.bz2"), readr::read_tsv, .id = "sample")
 
-###Simulate null model for one region###
-get_regional_sig_test <- function(region_name, ...){
-  
-  #get sites in the Northern rockies region and get species pool for that region
-  region_FD <- dplyr::filter(bbs_site_FD, region == region_name)
+means <- sim %>%
+  select(region, richness, FEve, FRic, FDis, RaoQ, starts_with("CWM")) %>%
+  group_by(region, richness) %>%
+  summarise_all(mean) %>%
+  gather("metric", "mean", -c(region, richness))
 
-  plan(multicore)
-  null_stats <- simulate_null(region_FD, ...)
+sds <- sim %>%
+  select(region, richness, FEve, FRic, FDis, RaoQ, starts_with("CWM")) %>%
+  group_by(region, richness) %>%
+  summarise_all(sd) %>%
+  gather("metric", "sd", -c(region, richness))
 
-  
-  safe_name <- get_safe_name(region_name)
-  path <- paste0("~/functional_diversity/data/stat/", safe_name, ".tsv.bz2")
-  write_tsv(null_stats, path)
-  pb_upload(path)
-  
-  metric_names <- c("FRic", "qual.FRic", "FEve", "FDiv", "FDis", "RaoQ")
-  
-  FD_sig <- region_FD %>%
-    select(-sing.sp, -starts_with("CWM")) %>%
-    gather(metric_names, key = "metric", value = "value") %>%
-    left_join(null_stats, by = c("nbsp" = "richness", "metric")) %>%
-    mutate(significant = ifelse(value > lowerCI & value < upperCI, FALSE, TRUE)) %>%
-    select(-c("value","region", "mean", "sd", "se", "lowerCI", "upperCI")) %>%
-    spread(metric, significant)
-  
-  path <- paste0("~/functional_diversity/data/stat_test/", safe_name, ".tsv.bz2")
-  write_tsv(FD_sig, path)
-  pb_upload(path)
-  
-  return(TRUE)
-}
-
-get_metric_sig <- function(){
-  if(!dir.exists(here("data", "stat_test"))){
-
-    dir.create(paste0(here(), "/data/stat"))
-    dir.create(paste0(here(), "/data/stat_test"))
-
-    out <- map(unique(bbs_site_FD$region), get_regional_sig_test)
-  }
-  
-  stat_test <- purrr::map_dfr(fs::dir_ls(path = here("data", "stat_test"), glob="*.tsv.bz2"), readr::read_tsv, .id = "region")
-}
-
-stat_test <- get_metric_sig()
-
-stats <- purrr::map_dfr(fs::dir_ls(path = here("data", "stat"), glob="*.tsv.bz2"), readr::read_tsv, .id = "region")
-
+stats <- left_join(means, sds, by = c("region", "richness", "metric")) %>%
+  mutate(se = sd/sqrt(n),
+         lowerCI = mean - qt(0.975, n - 1) * se, 
+         upperCI = mean + qt(0.975, n - 1) * se)  
 ```
+
 
 Map of regions with bbs sites
 ```{r}
@@ -280,24 +208,26 @@ plot(vol, show.3d = TRUE, show.legend = TRUE,
 
 Plot simulated and observed metric values for a given region. 
 ```{r, include=FALSE}
-metric_names <- c("FRic", "qual.FRic", "FEve", "FDiv", "FDis", "RaoQ")
+metric_names <- c("FRic", "qual.FRic", "FEve", "FDis", "RaoQ")
 
-region_name <- "APPALACHIAN MOUNTAINS"
+
 region_stats <- read_tsv(here("data", "stat", paste0(get_safe_name(region_name), ".tsv.bz2")))
 
-region_data <- dplyr::filter(bbs_site_FD, region == region_name) %>%
-    select(-sing.sp, -starts_with("CWM")) %>%
-    gather(metric_names, key = "metric", value = "value") %>%
-    left_join(region_stats, by = c("nbsp" = "richness", "metric")) %>%
-    mutate(significant = ifelse(value > lowerCI & value < upperCI, FALSE, TRUE))
+
+region_name <- "APPALACHIAN MOUNTAINS"
+region_data <- filter(bbs_site_FD, region == region_name) %>%
+    select(-sing.sp) %>%
+    gather(unique(stats$metric), key = "metric", value = "observed") %>%
+    left_join(filter(stats, region == region_name), by = c("nbsp" = "richness", "metric", "region")) %>%
+    mutate(significant = ifelse(observed > lowerCI & observed < upperCI, FALSE, TRUE), observed = as.numeric(observed))
 
 lines <- region_data %>%
-  drop_na() %>%
-  filter(metric %in% c("FDis", "FDiv", "FEve")) %>%
+  #drop_na() %>%
+  filter(metric %in% c("FDis", "FRic", "FEve")) %>%
   ggplot(aes(x = nbsp)) + 
     geom_line(aes(y = mean)) +
     geom_ribbon(aes(ymin = lowerCI, ymax = upperCI), alpha = 0.2) +
-  geom_point(aes(y = value, color = significant)) +
+  geom_point(aes(y = observed, color = significant)) +
     scale_color_manual(values = c("chocolate", "#78B7C5")) +
   theme_classic() +
   facet_wrap(.~metric, scales = "free", ncol = 1)
