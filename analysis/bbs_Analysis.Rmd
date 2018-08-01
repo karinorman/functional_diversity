@@ -107,7 +107,9 @@ get_sample_FD <- function(x){
 
 if(!dir.exists(here("data", "fd_samples"))){
   dir.create(paste0(here(), "/data/fd_samples"))
-  system.time({out <- future_map(2:45, get_sample_FD)})
+  
+  plan(multicore)
+  system.time({out <- future_map(47:1000, get_sample_FD)})
 }
 
 ```
