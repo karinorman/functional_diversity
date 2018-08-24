@@ -169,10 +169,15 @@ tm_shape(bcr_regions) +
   tm_borders(col = "black") +
   #tm_fill(col = "region_shape", palette = c("white", "sienna"), alpha = 0.25, legend.show = FALSE) +
 tm_shape(st_as_sf(bbs_site_FD)) +
-  tm_dots(col = "nbsp", palette = "Blues") +
+  tm_dots(col = "nbsp", size = 0.05, palette = "Blues", title = "Richness") +
 tm_layout(legend.position = c("left", "bottom"))
 
-regions_ma
+path <- paste0(here(), "/figures")
+if(!dir.exists(path)){
+  dir.create(path)
+}
+
+tmap_save(regions_ma, paste0(path, "/bbs_sites.jpeg"))
 ```
 
 Example Hypervolume
@@ -201,7 +206,7 @@ plot(vol, show.3d = TRUE, show.legend = TRUE,
 Plot simulated and observed metric values for a given region. 
 ```{r, include=FALSE}
 
-plot_region_metrics <- function(region_name){
+plot_region_metrics <- function(region_name, metric_names){
   
   region_data <- filter(bbs_site_FD, region == region_name) %>%
     select(-sing.sp) %>%
@@ -211,22 +216,24 @@ plot_region_metrics <- function(region_name){
            observed = as.numeric(observed))
   
   lines <- region_data %>%
-    filter(metric %in% c("FDis", "FRic", "FEve")) %>%
+    filter(metric %in% metric_names) %>%
     ggplot(aes(x = nbsp)) + 
     geom_line(aes(y = mean)) +
     geom_ribbon(aes(ymin = lowerCI, ymax = upperCI), alpha = 0.2) +
     geom_point(aes(y = observed, color = significant)) +
-    scale_color_manual(values = c("chocolate", "#78B7C5")) +
+    scale_color_manual(values = c("#78B7C5", "chocolate")) +
     theme_classic() +
-    facet_wrap(.~metric, scales = "free", ncol = 1) +
+    facet_wrap(.~metric, scales = "free") +
     ggtitle(region_name)
   
   lines
 }
 
-plot_region_metrics(region_name = "APPALACHIAN MOUNTAINS")
+plot_region_metrics(region_name = "APPALACHIAN MOUNTAINS", metric_names = c("FRic"))
+plot_region_metrics(region_name = "APPALACHIAN MOUNTAINS", metric_names = c("FDis", "FRic"))
 
-map(unique(bbs_site_FD$region), plot_region_metrics)
+map(unique(bbs_site_FD$region), plot_region_metrics, 
+    metric_names = c("FDis", "FRic", "FEve"))
 
 ```
 
@@ -244,3 +251,75 @@ plot_fric <- function(region_name){
 map(unique(bbs_site_FD$region)[1:18], plot_fric)
 
 ```
+
+Plot of all null model lines
+```{r}
+get_null_lines <- function(metric_name){
+nulls <- stats %>%
+  filter(metric %in% metric_name) %>%
+  ggplot(aes(x = richness)) + 
+  geom_line(aes(y = mean, group = region)) +
+  #geom_line(aes(y = mean, group = region, color = region)) +
+  #facet_wrap(.~metric, scales = "free", ncol = 1) +
+  theme_classic() +
+  theme(legend.position = "none")+
+  ggtitle(metric_name)
+}
+
+map(c("FDis", "FRic", "FEve"), get_null_lines)
+```
+
+Plot one metric for all regions
+```{r}
+plot_one_metric <- function(metric_name){
+  
+  region_data <- bbs_site_FD %>%
+    select(-sing.sp) %>%
+    gather(unique(stats$metric), key = "metric", value = "observed") %>%
+    left_join(stats, by = c("nbsp" = "richness", "metric", "region")) %>%
+    mutate(significant = ifelse(observed > lowerCI & observed < upperCI, FALSE, TRUE), 
+           observed = as.numeric(observed))
+  
+  lines <- region_data %>%
+    filter(metric == metric_name) %>%
+    ggplot(aes(x = nbsp)) + 
+    geom_line(aes(y = mean)) +
+    geom_ribbon(aes(ymin = lowerCI, ymax = upperCI), alpha = 0.2) +
+    geom_point(aes(y = observed, color = significant)) +
+    scale_color_manual(values = c("chocolate", "#78B7C5")) +
+    theme_classic() +
+    facet_wrap(.~region, scales = "free")
+  
+  lines
+}
+
+plot_one_metric("FDis")
+```
+
+Evenness
+```{r}
+plot_evenness <- function(regions){
+  
+  region_data <- filter(bbs_site_FD, region %in% regions) %>%
+    select(-sing.sp) %>%
+    gather(unique(stats$metric), key = "metric", value = "observed") %>%
+    left_join(stats, by = c("nbsp" = "richness", "metric", "region")) %>%
+    mutate(significant = ifelse(observed > lowerCI & observed < upperCI, FALSE, TRUE), 
+           observed = as.numeric(observed))
+  
+  lines <- region_data %>%
+    filter(metric == "FEve") %>%
+    ggplot(aes(x = nbsp)) + 
+    geom_line(aes(y = mean)) +
+    geom_ribbon(aes(ymin = lowerCI, ymax = upperCI), alpha = 0.2) +
+    geom_point(aes(y = observed, color = significant)) +
+    scale_color_manual(values = c("chocolate", "#78B7C5")) +
+    theme_classic() +
+    facet_wrap(.~region, scales = "free")
+  
+  lines
+}
+
+plot_evenness(c("APPALACHIAN MOUNTAINS", "NORTHERN PACIFIC RAINFOREST", "GREAT BASIN"))
+```
+
