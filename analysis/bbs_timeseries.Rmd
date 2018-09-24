@@ -35,9 +35,15 @@ bbs_wide <- bbs %>%
 bbs_species_mat <- select(bbs_wide, -site_id, -year)
 bbs_trait_mat <- get_trait_matrix(colnames(bbs_species_mat))
 
-FD <- as.data.frame(dbFD(bbs_trait_mat, bbs_species_mat, w.abun = TRUE))
 data_path <- paste0(here('data'), '/FD_bbs_yearly.RData')
-save(FD, file = data_path)
+  if (file.exists(data_path)){
+    print("FD present")
+    FD_file <- load(data_path)
+  }else{
+    print("No FD")
+    FD <- as.data.frame(dbFD(bbs_trait_mat, bbs_species_mat, w.abun = TRUE))
+    save(FD, file = data_path)
+  }
 
 FD <- cbind(bbs_wide[c('site_id', 'year')], FD) #dbFD() preserves row order, so we can just brute force labels back on 
 FD$site_id <- as.factor(FD$site_id)
@@ -68,6 +74,37 @@ yearly_delta <- FD %>%
   arrange(year) %>%
   mutate(nbsp_delta = (lag(nbsp) - nbsp)/nbsp,
          fric_delta = (lag(FRic) - FRic)/FRic)
-
 ```
+
+Simpson's dissimilarity
+
+want to map across a list of years, so the function should group by 
+```{r}
+library(fossil)
+
+get_simpson <- function(site, start_year){
+  sp1 <- filter(bbs, site_id == site & year == start_year) %>%
+    select(species_id, abundance)
+  
+  sp2 <- filter(bbs, site_id == site & year == start_year + 1) %>%
+    select(species_id, abundance)
+  
+  if(dim(sp2)[1] == 0){
+    return(data.frame())
+  } else{   
+    #need a complete list of species in both sites with zeros for non-occurrences
+    comb_sp <- full_join(sp1, sp2, by = "species_id") %>%
+      replace_na(list(species_id = 0, abundance.x = 0, abundance.y = 0))
+    
+    simp <- simpson(comb_sp$abundance.x, comb_sp$abundance.y)
+    return(data.frame(site_id = site, year = start_year + 1, simpson = simp))
+  }
+} 
+
+site_year_comb <- unique(bbs[c('site_id', 'year')]) #get a dataframe of all the site and year combinations that need to be mapped over 
+
+bbs_simpson <- map2(site_year_comb$site_id, site_year_comb$year, get_simpson)
+```
+
+
 
