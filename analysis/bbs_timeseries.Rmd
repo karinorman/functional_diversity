@@ -1,0 +1,73 @@
+---
+title: "Temporal Analysis"
+author: "Kari Norman"
+date: "9/19/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(dplyr)
+library(FD)
+library(furrr)
+library(here)
+library(functional.diversity)
+
+
+#piggyback::pb_download(repo = "karinorman/functional_diversity", dest = here())
+
+load(here("data", "trait.rda"))
+load(here("data", "bbs.rda"))
+```
+
+Get FD and TD for each site for each year
+```{r}
+min_year <- 1969
+
+bbs_wide <- bbs %>%
+  select(site_id, scientific, year, abundance) %>%
+  spread(scientific, abundance)
+
+bbs_species_mat <- select(bbs_wide, -site_id, -year)
+bbs_trait_mat <- get_trait_matrix(colnames(bbs_species_mat))
+
+FD <- as.data.frame(dbFD(bbs_trait_mat, bbs_species_mat, w.abun = TRUE))
+data_path <- paste0(here('data'), '/FD_bbs_yearly.RData')
+save(FD, file = data_path)
+
+FD <- cbind(bbs_wide[c('site_id', 'year')], FD) #dbFD() preserves row order, so we can just brute force labels back on 
+FD$site_id <- as.factor(FD$site_id)
+
+#double check that labels are right by comparing richnesses calculated below
+# richness <- bbs %>%
+#   select(site_id, scientific, year) %>%
+#   group_by(site_id, year) %>%
+#   summarise(n = n())
+
+```
+
+Fitting a general trend with GAM
+```{r}
+library(mgcv)
+
+fit <- gam(nbsp ~ s(year) + s(site_id, bs = 're'), data = FD)
+summary(fit)
+```
+
+Jarzyna & Jetz 2016 (doi: 10.1111/gcb.13571) calculates a few different metrics to measure temporal change.
+
+Change relative to previous year: (previous year - current year)/current year x 100%
+```{r}
+yearly_delta <- FD %>%
+  select(site_id, year, nbsp) %>%
+  group_by(site_id) %>%
+  arrange(year) %>%
+  mutate(nbsp_delta = (lag(nbsp) - nbsp)/nbsp,
+         fric_delta = (lag(FRic) - FRic)/FRic)
+
+```
+
