@@ -77,8 +77,9 @@ yearly_delta <- FD %>%
 ```
 
 Simpson's dissimilarity
+Still need to figure out how to deal with holes in the timeseries
 
-want to map across a list of years, so the function should group by 
+Attempt using purrr
 ```{r}
 library(fossil)
 
@@ -103,8 +104,44 @@ get_simpson <- function(site, start_year){
 
 site_year_comb <- unique(bbs[c('site_id', 'year')]) #get a dataframe of all the site and year combinations that need to be mapped over 
 
-bbs_simpson <- map2(site_year_comb$site_id, site_year_comb$year, get_simpson)
+bbs_simpson <- map2_dfr(site_year_comb$site_id, site_year_comb$year, get_simpson)
 ```
 
+For loop approach
+```{r}
+tic()
+
+site_list <- unique(bbs$site_id)
+
+#initialize for loops
+simpson_list <- list()
+rownum <- 1
+
+for (i in 1:length(site_list)) {
+  site_data <- filter(bbs, site_id == site_list[i])
+  site_years <- unique(site_data$year)
+  
+  for (j in 1:length(site_years)) {
+    if (j != length(site_years)) { #this will skip the last year which doesn't have a next year to compare to
+      sp1 <- filter(site_data, year == site_years[j]) %>%
+        select(species_id, abundance)
+      
+      sp2 <- filter(site_data, year == site_years[j + 1]) %>%
+        select(species_id, abundance)
+      
+      comb_sp <- full_join(sp1, sp2, by = "species_id") %>%
+      replace_na(list(species_id = 0, abundance.x = 0, abundance.y = 0))
+    
+      simp <- simpson(comb_sp$abundance.x, comb_sp$abundance.y)
+      simpson_list[[rownum]] <- data.frame(site_id = site_list[i], year = site_years[j+1], simpson = simp)
+      
+      rownum <- rownum + 1
+    }
+  }
+}
+bbs_simpson <- bind_rows(simpson_list)
+
+toc()
+```
 
 
