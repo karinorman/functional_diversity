@@ -43,6 +43,7 @@ data_path <- paste0(here('data'), '/FD_bbs_yearly.RData')
     print("No FD")
     FD <- as.data.frame(dbFD(bbs_trait_mat, bbs_species_mat, w.abun = TRUE))
     save(FD, file = data_path)
+    pb_upload(data_path)
   }
 
 FD <- cbind(bbs_wide[c('site_id', 'year')], FD) #dbFD() preserves row order, so we can just brute force labels back on 
