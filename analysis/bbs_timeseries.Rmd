@@ -145,4 +145,13 @@ bbs_simpson <- bind_rows(simpson_list)
 toc()
 ```
 
+Master dataframe of all the metrics
+```{r}
+
+```
+
+Plotting!
+```{r}
+
+```
 
