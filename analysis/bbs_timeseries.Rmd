@@ -18,7 +18,7 @@ library(here)
 library(functional.diversity)
 
 
-#piggyback::pb_download(repo = "karinorman/functional_diversity", dest = here())
+piggyback::pb_download(repo = "karinorman/functional_diversity", dest = here())
 
 load(here("data", "trait.rda"))
 load(here("data", "bbs.rda"))
@@ -70,7 +70,7 @@ Jarzyna & Jetz 2016 (doi: 10.1111/gcb.13571) calculates a few different metrics 
 Change relative to previous year: (previous year - current year)/current year x 100%
 ```{r}
 yearly_delta <- FD %>%
-  select(site_id, year, nbsp) %>%
+  select(site_id, year, nbsp, FRic) %>%
   group_by(site_id) %>%
   arrange(year) %>%
   mutate(nbsp_delta = (lag(nbsp) - nbsp)/nbsp,
