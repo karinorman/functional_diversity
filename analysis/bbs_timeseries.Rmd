@@ -103,37 +103,45 @@ bbs_simpson <- map2_dfr(site_year_comb$site_id, site_year_comb$year, get_simpson
 
 For loop approach
 ```{r}
-
-site_list <- unique(bbs$site_id)
-
-#initialize for loops
-simpson_list <- list()
-rownum <- 1
-
-for (i in 1:length(site_list)) {
-  site_data <- filter(bbs, site_id == site_list[i])
-  site_years <- unique(site_data$year)
+data_path <- paste0(here('data'), '/simpson_diversity.RData')
+if (file.exists(data_path)){
+  simpson_file <- load(data_path)
+}else{
   
-  for (j in 1:length(site_years)) {
-    if (j != length(site_years)) { #this will skip the last year which doesn't have a next year to compare to
-      sp1 <- filter(site_data, year == site_years[j]) %>%
-        select(species_id, abundance)
-      
-      sp2 <- filter(site_data, year == site_years[j + 1]) %>%
-        select(species_id, abundance)
-      
-      comb_sp <- full_join(sp1, sp2, by = "species_id") %>%
-      replace_na(list(species_id = 0, abundance.x = 0, abundance.y = 0))
+  site_list <- unique(bbs$site_id)
+  
+  #initialize for loops
+  simpson_list <- list()
+  rownum <- 1
+  
+  for (i in 1:length(site_list)) {
+    site_data <- filter(bbs, site_id == site_list[i])
+    site_years <- unique(site_data$year)
     
-      simp <- simpson(comb_sp$abundance.x, comb_sp$abundance.y)
-      simpson_list[[rownum]] <- data.frame(site_id = site_list[i], year = site_years[j+1], simpson = simp)
-      
-      rownum <- rownum + 1
+    for (j in 1:length(site_years)) {
+      if (j != length(site_years)) { #this will skip the last year which doesn't have a next year to compare to
+        sp1 <- filter(site_data, year == site_years[j]) %>%
+          select(species_id, abundance)
+        
+        sp2 <- filter(site_data, year == site_years[j + 1]) %>%
+          select(species_id, abundance)
+        
+        comb_sp <- full_join(sp1, sp2, by = "species_id") %>%
+          replace_na(list(species_id = 0, abundance.x = 0, abundance.y = 0))
+        
+        simp <- simpson(comb_sp$abundance.x, comb_sp$abundance.y)
+        simpson_list[[rownum]] <- data.frame(site_id = site_list[i], year = site_years[j+1], simpson = simp)
+        
+        rownum <- rownum + 1
+      }
     }
   }
+  
+  bbs_simpson <- bind_rows(simpson_list)
+  save(bbs_simpson, file = data_path)
+  
+  pb_upload(data_path)
 }
-bbs_simpson <- bind_rows(simpson_list)
-
 ```
 
 Master dataframe of all the metrics
