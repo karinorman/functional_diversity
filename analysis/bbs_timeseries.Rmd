@@ -15,6 +15,7 @@ library(dplyr)
 library(FD)
 library(furrr)
 library(here)
+library(foreach)
 library(functional.diversity)
 
 
@@ -47,7 +48,7 @@ data_path <- paste0(here('data'), '/FD_bbs_yearly.RData')
   }
 
 FD <- cbind(bbs_wide[c('site_id', 'year')], FD) #dbFD() preserves row order, so we can just brute force labels back on 
-FD$site_id <- as.factor(FD$site_id)
+#FD$site_id <- as.factor(FD$site_id)
 
 #double check that labels are right by comparing richnesses calculated below
 # richness <- bbs %>%
@@ -55,14 +56,6 @@ FD$site_id <- as.factor(FD$site_id)
 #   group_by(site_id, year) %>%
 #   summarise(n = n())
 
-```
-
-Fitting a general trend with GAM
-```{r}
-library(mgcv)
-
-fit <- gam(nbsp ~ s(year) + s(site_id, bs = 're'), data = FD)
-summary(fit)
 ```
 
 Jarzyna & Jetz 2016 (doi: 10.1111/gcb.13571) calculates a few different metrics to measure temporal change.
@@ -110,7 +103,6 @@ bbs_simpson <- map2_dfr(site_year_comb$site_id, site_year_comb$year, get_simpson
 
 For loop approach
 ```{r}
-tic()
 
 site_list <- unique(bbs$site_id)
 
@@ -142,16 +134,30 @@ for (i in 1:length(site_list)) {
 }
 bbs_simpson <- bind_rows(simpson_list)
 
-toc()
 ```
 
 Master dataframe of all the metrics
 ```{r}
-
+metrics <- FD %>%
+  select(-starts_with("CWM"), -qual.FRic, -sing.sp) %>%
+  left_join(bbs_simpson, by = c("year", "site_id")) %>%
+  left_join(yearly_delta, by = c("year", "site_id", "nbsp"))
 ```
 
 Plotting!
 ```{r}
+sites <- unique(metrics$site_id)
+metrics %>%
+  filter(site_id %in% sites[1:10]) %>%
+  ggplot(aes(year, nbsp, color = as.factor(site_id))) + geom_line() #+
+    #theme(legend.position = "none")
+``` 
 
+```{r}
+metrics %>%
+  group_by(year) %>%
+  summarise(ave = mean(nbsp)) %>%
+  mutate(ave_5 = RcppRoll::roll_mean(ave, n = 5, fill = NA)) %>%
+  ggplot(aes(year, ave_5)) + geom_line()
 ```
 
