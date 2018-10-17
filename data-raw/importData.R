@@ -66,18 +66,18 @@ bbs_data <- get_bbs()
 ###################
 ####Trait Data#####
 ###################
-get_elton_trait <- function(){
-  data_path <- paste('./extdata/elton_traits/', 'elton_traits', '_BirdFuncDat.csv', sep = "")
-  if (file.exists(data_path)){
-    return(read_csv(data_path))
-  }else{
-    dir.create("./extdata/elton_traits")
-    rdataretriever::install("elton-traits", 'csv', data_dir = "data/elton_traits")
-    return(read_csv(data_path))
-  }
+
+bird_path <- "elton_traits/elton_traits_BirdFuncDat.csv"
+mamm_path <- "elton_traits/elton_traits_MammFuncDat.csv"
+
+if (system.file("extdata", bird_path, package = "functional.diversity") == "") {
+  dir.create("./extdata/elton_traits")
+  rdataretriever::install("elton-traits", 'csv', data_dir = "data/elton_traits")
 }
 
-trait <- get_elton_trait()
+bird_trait <- read_csv(system.file("extdata", bird_path, package = "functional.diversity"))
+mamm_trait <- read_csv(system.file("extdata", mamm_path, package = "functional.diversity"))
+
 
 ####################
 ### BBS & Trait ####
@@ -154,6 +154,6 @@ get_bbs_compatible_sci_names <- function(){
   }
 }
 
-bbs <- get_bbs_compatible_sci_names()
+bbs_trait_compat <- get_bbs_compatible_sci_names()
 
-devtools::use_data(trait, bbs_trait_compat)
+devtools::use_data(bird_trait, mamm_trait, bbs_trait_compat)

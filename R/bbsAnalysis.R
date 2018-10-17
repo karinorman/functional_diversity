@@ -1,7 +1,7 @@
 #' Get a species by site matrix from a dataframe of observations
 #' @export
-get_species_matrix <- function(){
-  species <- bbs %>% #401 species, 4176 sites, some not seen in the time period
+get_species_matrix <- function(data = bbs){
+  species <- data %>% #401 species, 4176 sites, some not seen in the time period
     filter(year > min_year) %>%
     dplyr::select(scientific, site_id, abundance) %>%
     group_by(scientific, site_id) %>%
