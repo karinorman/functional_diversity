@@ -67,16 +67,16 @@ bbs_data <- get_bbs()
 ####Trait Data#####
 ###################
 
-bird_path <- "elton_traits/elton_traits_BirdFuncDat.csv"
-mamm_path <- "elton_traits/elton_traits_MammFuncDat.csv"
+bird_path <- system.file("extdata", "elton_traits/elton_traits_BirdFuncDat.csv", package = "functional.diversity")
+mamm_path <- system.file("extdata", "elton_traits/elton_traits_MammFuncDat.csv", package = "functional.diversity")
 
-if (system.file("extdata", bird_path, package = "functional.diversity") == "") {
+if (bird_path == "") {
   dir.create("./extdata/elton_traits")
   rdataretriever::install("elton-traits", 'csv', data_dir = "data/elton_traits")
 }
 
-bird_trait <- read_csv(system.file("extdata", bird_path, package = "functional.diversity"))
-mamm_trait <- read_csv(system.file("extdata", mamm_path, package = "functional.diversity"))
+bird_trait <- read_csv(bird_path)
+mamm_trait <- read_csv(mamm_path)
 
 
 ####################
@@ -154,6 +154,31 @@ get_bbs_compatible_sci_names <- function(){
   }
 }
 
-bbs_trait_compat <- get_bbs_compatible_sci_names()
+bbs <- get_bbs_compatible_sci_names()
 
-devtools::use_data(bird_trait, mamm_trait, bbs_trait_compat)
+####################
+###   BioTime   ####
+###  Database   ####
+####################
+
+path <- system.file("extdata", "biotime_query.csv", package = "functional.diversity")
+
+if (path == "") {
+  rdataretriever::install("biotime", "csv", data_dir = here("extdata"))
+}
+
+biotime <- read.csv(path)
+names <- colnames(biotime)
+
+biotime_clean <- biotime %>%
+  select(-study_id) %>%
+  magrittr::set_colnames(names[-length(names)]) %>%
+  unite(genus_species, c("genus", "species"), sep = " ")
+
+biotime_meta <- read.csv(system.file("extdata", "biotime_metadata.csv", package = "functional.diversity"))
+
+biotime_data <- biotime_meta %>% 
+  select(study_id, realm, climate, habitat, protected_area, taxa, organisms) %>%
+  right_join(biotime_clean, by = "study_id")
+
+devtools::use_data(bird_trait, mamm_trait, bbs, biotime_data)
