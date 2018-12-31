@@ -19,10 +19,10 @@ library(here)
 library(functional.diversity)
 
 
-#piggyback::pb_download(repo = "karinorman/functional_diversity", dest = here())
+#piggyback::pb_download(repo = "karinorman/functional_diversity", dest = here::here())
 
-load(here("data", "trait.rda"))
-load(here("data", "bbs.rda"))
+load(here::here("data", "trait.rda"))
+load(here::here("data", "bbs.rda"))
 
 
 min_year = 2006 #define the minimum year of sampling to include
@@ -114,12 +114,12 @@ Simulations
 
 n <- 1000 #sample size
 
-if(!dir.exists(here("data", "fd_samples"))){
-  dir.create(paste0(here(), "/data/fd_samples"))
-  system.time({out <- future_map(2:45, get_sample_FD)})
+if(!dir.exists(here::here("data", "fd_samples"))){
+  dir.create(paste0(here::here(), "/data/fd_samples"))
+  system.time({out <- future_map(1:n, get_sample_FD)})
 }
 
-sim <- purrr::map_dfr(fs::dir_ls(path = here("data", "fd_samples"), glob="*.tsv.bz2"), readr::read_tsv, .id = "sample")
+sim <- purrr::map_dfr(fs::dir_ls(path = here::here("data", "fd_samples"), glob="*.tsv.bz2"), readr::read_tsv, .id = "sample")
 
 means <- sim %>%
   select(region, richness, FEve, FRic, FDis, RaoQ, starts_with("CWM")) %>%
@@ -172,7 +172,7 @@ tm_shape(st_as_sf(bbs_site_FD)) +
   tm_dots(col = "nbsp", size = 0.05, palette = "Blues", title = "Richness") +
 tm_layout(legend.position = c("left", "bottom"))
 
-path <- paste0(here(), "/figures")
+path <- paste0(here::here(), "/figures")
 if(!dir.exists(path)){
   dir.create(path)
 }
@@ -321,5 +321,30 @@ plot_evenness <- function(regions){
 }
 
 plot_evenness(c("APPALACHIAN MOUNTAINS", "NORTHERN PACIFIC RAINFOREST", "GREAT BASIN"))
+```
+
+Models using local and region-level variables.
+```{r}
+site_vars <- read_tsv("data/site_variables.tsv.bz2") %>%
+  select(-year) %>%
+  na.omit() %>%
+  group_by(site) %>%
+  summarise_all(mean)
+  
+
+mod_df <- bbs_site_FD %>% 
+  select(-c(sing.sp, qual.FRic)) %>%
+  rename(richness = nbsp) %>%
+  gather(key = "metric", value = "observed", -c(richness, site_id, region, geometry)) %>%
+  full_join(stats, by = c("richness", "region", "metric")) %>%
+  mutate(observed = as.numeric(observed), metric_adj = (observed - mean)) %>%
+  filter(metric != "CWM.diet_5cat") %>%
+  left_join(site_vars, by = c("site_id" = "site"))
+
+```
+
+Functional dispersion as response variable
+```{r}
+
 ```
 
