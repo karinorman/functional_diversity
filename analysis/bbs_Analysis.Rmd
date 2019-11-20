@@ -50,7 +50,13 @@ We want to be able to figure out if a site's Functional Diversity (FD) is signif
 Simulation functions
 ```{r}
 #site level FD with region assignments
-bbs_site_FD <- get_complete_site_data()
+file <- here::here("data", "bbs_site_FD.rda")
+if (file.exists(file)){
+  load(file)
+}else{
+  bbs_site_FD <- get_complete_site_data()
+  usethis::use_data(bbs_site_FD)
+}
 
 get_region_samples <- function(region_name){
   region_data <- filter(bbs_site_FD, region == region_name)
@@ -137,6 +143,8 @@ stats <- left_join(means, sds, by = c("region", "richness", "metric")) %>%
   mutate(se = sd/sqrt(n),
          lowerCI = mean - qt(0.975, n - 1) * se, 
          upperCI = mean + qt(0.975, n - 1) * se)  
+
+usethis::use_data(stats)
 ```
 
 
@@ -325,11 +333,17 @@ plot_evenness(c("APPALACHIAN MOUNTAINS", "NORTHERN PACIFIC RAINFOREST", "GREAT B
 
 Models using local and region-level variables.
 ```{r}
-site_vars <- read_tsv("data/site_variables.tsv.bz2") %>%
-  select(-year) %>%
+library(modeest)
+site_data <- read_tsv("data/site_variables.tsv.bz2")
+
+site_vars <- site_data %>%
+  select(-year, -land_cover) %>% #exclude land_cover because we want to use a different summarising function
   na.omit() %>%
   group_by(site) %>%
-  summarise_all(mean)
+  summarise_all(mean) %>%
+  left_join(site_data %>% group_by(site) %>% 
+              summarise(., land_cover = sort(table(land_cover),decreasing=TRUE)[1]), by = "site")
+  
   
 
 mod_df <- bbs_site_FD %>% 
@@ -338,13 +352,46 @@ mod_df <- bbs_site_FD %>%
   gather(key = "metric", value = "observed", -c(richness, site_id, region, geometry)) %>%
   full_join(stats, by = c("richness", "region", "metric")) %>%
   mutate(observed = as.numeric(observed), metric_adj = (observed - mean)) %>%
-  filter(metric != "CWM.diet_5cat") %>%
-  left_join(site_vars, by = c("site_id" = "site"))
+  filter(metric != c("CWM.diet_5cat", "CWM.pelagicspecialist", "CWM.forstrat_speclevel", "CWM.nocturnal")) %>%
+  left_join(site_vars, by = c("site_id" = "site")) %>%
+  select(-site_id.y) %>%
+  mutate(land_cover = as.factor(land_cover), site_id = as.factor(site_id)) %>%
+  select(-c(mean, sd, se, lowerCI, upperCI)) %>%
+  na.omit() %>%
+  mutate_at(vars(-c(richness, site_id, region, geometry, metric, land_cover)), 
+            function(x){(x - mean(x)) / sd(x)})
 
 ```
+
+```{r}
+library(GGally)
+
+pairplots <- mod_df %>%
+  filter(metric == "FDis") %>%
+  select(metric_adj:ndvi, -land_cover, -ends_with("yearly")) %>%
+  ggpairs()
+```
+
 
 Functional dispersion as response variable
 ```{r}
+library(lme4)
 
+get_step_formula <- function(metric_name){
+  metric_df <- mod_df %>% filter(metric == metric_name)
+  
+  print(unique(metric_df$metric))
+        
+  null <- glm(metric_adj ~ 1, data = metric_df)  
+  full <- glm(metric_adj ~ prcp..mm.day.samp + srad..W.m.2.samp + tmax..deg.c.samp + 
+                #tmin..deg.c.samp + 
+                land_cover + npp , data = metric_df)
+  
+  return(step(null, scope=list(lower=null, upper=full), direction="forward"))
+}
+
+fric_form <- get_step_formula("FRic")
+fdis_form <- get_step_formula("FDis")
+
+plot(fitted(mod1), residuals(mod1), xlab = "fitted", ylab = "residuals")
 ```
-
