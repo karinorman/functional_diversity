@@ -36,19 +36,19 @@ bbs_wide <- bbs %>%
 bbs_species_mat <- select(bbs_wide, -site_id, -year)
 bbs_trait_mat <- get_trait_matrix(colnames(bbs_species_mat))
 
-data_path <- paste0(here('data'), '/FD_bbs_yearly.RData')
+data_path <- paste0(here('data', 'FD_bbs_yearly.rda'))
   if (file.exists(data_path)){
     print("FD present")
-    FD_file <- load(data_path)
+    load(data_path)
   }else{
     print("No FD")
     FD <- as.data.frame(dbFD(bbs_trait_mat, bbs_species_mat, w.abun = TRUE))
-    save(FD, file = data_path)
+    FD_bbs_yearly <- cbind(bbs_wide[c('site_id', 'year')], FD) #dbFD() preserves row order, so we can just brute force labels back on 
+    usethis::use_data(FD_bbs_yearly)
     pb_upload(data_path)
   }
 
-FD <- cbind(bbs_wide[c('site_id', 'year')], FD) #dbFD() preserves row order, so we can just brute force labels back on 
-#FD$site_id <- as.factor(FD$site_id)
+#FD_bbs_yearly$site_id <- as.factor(FD_bbs_yearly$site_id)
 
 #double check that labels are right by comparing richnesses calculated below
 # richness <- bbs %>%
@@ -62,7 +62,7 @@ Jarzyna & Jetz 2016 (doi: 10.1111/gcb.13571) calculates a few different metrics 
 
 Change relative to previous year: (previous year - current year)/current year x 100%
 ```{r}
-yearly_delta <- FD %>%
+yearly_delta <- FD_bbs_yearly %>%
   select(site_id, year, nbsp, FRic) %>%
   group_by(site_id) %>%
   arrange(year) %>%
@@ -146,7 +146,7 @@ if (file.exists(data_path)){
 
 Master dataframe of all the metrics
 ```{r}
-metrics <- FD %>%
+metrics <- FD_bbs_yearly %>%
   select(-starts_with("CWM"), -qual.FRic, -sing.sp) %>%
   left_join(bbs_simpson, by = c("year", "site_id")) %>%
   left_join(yearly_delta, by = c("year", "site_id", "nbsp"))
