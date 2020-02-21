@@ -1,0 +1,153 @@
+---
+title: "Untitled"
+author: "Kari Norman"
+date: "11/20/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+```
+
+```{r}
+load(here::here("data", "bbs.rda"))
+load(here::here("data", "bbs_site_FD.rda"))
+load(here::here("data", "FD_bbs_yearly.rda"))
+load(here::here("data", "stats.rda"))
+```
+
+Create data frame with null model estimates, observed metrics, and null and glm adjustments 
+```{r}
+
+min_year = 2006 #define the minimum year of sampling to include
+
+p <- st_crs(wkt='PROJCS["USA_Contiguous_Albers_Equal_Area_Conic",
+    GEOGCS["GCS_North_American_1983",
+            DATUM["North_American_Datum_1983",
+            SPHEROID["GRS_1980",6378137,298.257222101]],
+            PRIMEM["Greenwich",0],
+            UNIT["Degree",0.017453292519943295]],
+            PROJECTION["Albers_Conic_Equal_Area"],
+            PARAMETER["False_Easting",0],
+            PARAMETER["False_Northing",0],
+            PARAMETER["longitude_of_center",-96],
+            PARAMETER["Standard_Parallel_1",29.5],
+            PARAMETER["Standard_Parallel_2",45.5],
+            PARAMETER["latitude_of_center",37.5],
+            UNIT["Meter",1],
+            AUTHORITY["EPSG","102003"]]')
+
+#Get region info for all the sites (not sites that were only sampled before 1969, we'll drop those later)
+continent <- get_sites_w_region(method = "intersect") #get sites that directly intersect (on the continent)
+  
+bbs_sites <- get_sites_sf()
+dropped_site_ids <- dplyr::setdiff(bbs_sites$site_id, continent$site_id) #find dropped
+dropped_sites <- bbs_sites %>% filter(site_id %in% dropped_site_ids)
+coast <- get_sites_w_region(sites = dropped_sites, method = "dist") #get sites that were dropped (on the coast)
+  
+all_sites <- rbind(continent, coast)
+
+#table of observed and null model metric estimates
+FD_table <- FD_bbs_yearly %>%
+  select(-sing.sp, -starts_with("CWM.")) %>%
+  rename(richness = nbsp) %>%
+  left_join(all_sites) %>%
+  filter(!is.na(region)) %>%
+  gather(key = metric, value = observed, -richness, -site_id, -year, -region, -geometry) %>%
+  left_join(stats %>% filter(!str_detect(metric, "CWM."))) %>%
+  mutate(null_adj = observed - mean) 
+
+glm_correction <- function(site){
+  model_data <- FD_table %>% filter(metric == "FRic", site_id == site)
+  fit <- glm(observed ~ year + richness, data = model_data)
+  
+  pred_vars <- model_data %>% 
+    select(richness, year) %>% 
+    distinct() %>%
+    mutate(fric_pred = predict(fit, ., type = "response"))
+  
+  plot_data <- left_join(model_data, pred_vars) %>%
+    mutate(glm_adj = observed - fric_pred,
+           glm_adj = ifelse(glm_adj > 0, glm_adj, 0))
+  
+  return(plot_data)
+}
+
+fd_adj_table <- map_df(unique(FD_table$site_id), glm_correction)
+```
+
+```{r}
+#get list of sites that have enough null model values
+fd_adj_plotting <- fd_adj_table %>% 
+  group_by(site_id) %>%
+  mutate(n_year = n_distinct(year), richness_range = max(richness) - min(richness)) %>%
+  filter(!is.na(mean)) %>%
+  group_by(site_id) %>%
+  mutate(n_year_non_na = n_distinct(year), percent = n_year_non_na/n_year) %>%
+  filter(percent > .85)
+
+plots <- fd_adj_table %>%
+  filter(site_id %in% unique(fd_adj_plotting$site_id)[1:6]) %>%
+  ggplot() +
+  geom_line(aes(x = year, y = observed), color = "blue") +
+  geom_line(aes(x = year, y = null_adj), color = "red") +
+  geom_line(aes(x = year, y = fric_pred), color = "green") +
+  geom_line(aes(x = year, y = glm_adj), color = "black") +
+  #scale_x_continuous(breaks = scales::pretty_breaks()) +
+  facet_wrap( ~ as.factor(site_id), scales = "free") +
+  theme(legend.position = "none") +
+  ylab("Fric")
+
+plots
+
+ggsave("fric_trends_bbs.png", plots)
+```
+
+```{r}
+# glm_correction <- function(site, plot_num){
+#     model_data <- FD_table %>% filter(metric == "FRic", site_id == site)
+#     fit <- glm(observed ~ richness, data = model_data)
+#     
+#     pred_vars <- model_data %>% 
+#         select(richness) %>% 
+#         distinct() %>%
+#         mutate(fric_pred = predict(fit, ., type = "response"))
+#     
+#     plot_data <- left_join(model_data, pred_vars) %>%
+#         mutate(fric_adj = observed - fric_pred,
+#                fric_adj = ifelse(fric_adj > 0, fric_adj, 0))
+#     
+#     return(plot_data)
+# }
+
+fd_adj_table_test <- map_df(unique(FD_table$site_id), glm_correction)
+
+#get list of sites that have enough null model values
+fd_adj_plotting_test <- fd_adj_table_test %>% 
+  group_by(site_id) %>%
+  mutate(n_year = n_distinct(year), richness_range = max(richness) - min(richness)) %>%
+  filter(!is.na(mean)) %>%
+  group_by(site_id) %>%
+  mutate(n_year_non_na = n_distinct(year), percent = n_year_non_na/n_year) %>%
+  filter(percent > .85)
+
+plots <- fd_adj_table_test %>%
+  filter(site_id %in% unique(fd_adj_plotting_test$site_id)[1:6]) %>%
+  ggplot() +
+  geom_line(aes(x = year, y = observed), color = "blue") +
+  geom_line(aes(x = year, y = null_adj), color = "red") +
+  geom_line(aes(x = year, y = fric_pred), color = "green") +
+  geom_line(aes(x = year, y = fric_adj), color = "black") +
+  #scale_x_continuous(breaks = scales::pretty_breaks()) +
+  facet_wrap( ~ as.factor(site_id), scales = "free") +
+  theme(legend.position = "none") +
+  ylab("Fric")
+
+plots
+
+ggsave("fric_trends_bbs.png", plots)
+```
